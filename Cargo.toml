@@ -21,3 +21,7 @@ rust-version = "1.75"
 license = "Apache-2.0"
 
 [dependencies]
+
+[[bin]]
+name = "cg2exec"
+path = "src/cg2exec.rs"
