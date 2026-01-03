@@ -82,14 +82,14 @@ impl ControlList {
 #[derive(Debug, Clone)]
 struct ControllerFlag {
 	pub name: String,
-	pub enable: bool,
+	pub _enable: bool,
 }
 
 fn parse_controller_flag(input: &str) -> Result<ControllerFlag, &'static str> {
 	if let Some(name) = input.strip_prefix('+') {
 		Ok(ControllerFlag {
 			name: name.to_string(),
-			enable: true,
+			_enable: true,
 		})
 	} else {
 		Err("controllers may only be enabled for now. Pass them with +, as in: +cpu +memory")
@@ -152,6 +152,26 @@ fn main() {
 				cgroup.classify(pid);
 			}
 		}
+		Command::Control(
+			ref cmd_args @ ControlCommand {
+				control: ControlList {
+					inherit: Some(ref inherit_cgroup_name),
+					..
+				},
+				..
+			},
+		) => {
+			let mut inherit_cgroup = cgroup.clone();
+			inherit_cgroup.append(&inherit_cgroup_name);
+			let controllers = inherit_cgroup.controllers();
+			cgroup.append(&cmd_args.cgroup);
+			if cmd_args.auto {
+				cgroup.create();
+			}
+			for controller in controllers {
+				cgroup.enable_controller(&*controller);
+			}
+		}
 		Command::Control(cmd_args) if cmd_args.control.is_empty() => {
 			cgroup.append(&cmd_args.cgroup);
 			if cmd_args.auto {
@@ -161,21 +181,13 @@ fn main() {
 			println!("Controllers enabled in {cgroup}: {controllers:?}");
 		}
 		Command::Control(cmd_args) => {
-			let mut anchor = None;
-			let controllers: Vec<&str> = if let Some(inherit_cgroup_name) = cmd_args.control.inherit {
-				let mut inherit_cgroup = cgroup.clone();
-				inherit_cgroup.append(&inherit_cgroup_name);
-				// Note: even with --auto, don't create the inherit cgroup
-				let vec = anchor.insert(inherit_cgroup.controllers());
-				vec.iter().map(|s| s.as_str()).collect()
-			} else {
-				cmd_args.control.controllers.iter().map(|c| c.name.as_str()).collect()
-			};
 			cgroup.append(&cmd_args.cgroup);
 			if cmd_args.auto {
 				cgroup.create();
 			}
-			cgroup.enable_controllers(controllers.as_slice());
+			for controller in cmd_args.control.controllers {
+				cgroup.enable_controller(&*controller.name);
+			}
 		}
 		Command::Restrict(cmd_args) => {
 			cgroup.append(&cmd_args.cgroup);

@@ -165,11 +165,11 @@ impl CGroup {
 	}
 
 	/// Allow children of the current [`CGroup`] to set restrictions on the given controllers.
-	pub fn enable_subtree_control(&self, new_controllers: &[&str]) {
+	pub fn enable_subtree_control(&self, controller: &str) {
 		if self.has_processes() {
 			println!("Warning: Control group {self} owns one or more processes. Enabling controllers in children of nonempty control groups can cause unexpected behavior. For example, a domain cgroup might turned into a threaded domain. See <https://docs.kernel.org/admin-guide/cgroup-v2.html>")
 		}
-		self.enable_controllers(new_controllers);
+		self.enable_controller(controller);
 		let Some(mut path) = self.cgroupfs_path_if_exists() else {
 			panic!("Error: Control group {self} does not exist");
 		};
@@ -181,45 +181,36 @@ impl CGroup {
 			}
 			Err(e) => panic!("Error: Opening {path:?}: {e}"),
 		};
-		for controller in new_controllers {
-			// It seems that this needs to be written as one chunk
-			let str_to_write = format!("+{controller}");
-			match write!(&mut f, "{str_to_write}") {
-				Ok(()) => {
-					println!("Notice: Enabled controller \"{controller}\" for subgroups of {self}");
-				}
-				Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
-					panic!(
-						"Error: Permission denied: cannot enable controller \"{controller}\" in control group {self}"
-					);
-				}
-				Err(e) => panic!("Error: Writing to {path:?}: {e}"),
+		// It seems that this needs to be written as one chunk
+		let str_to_write = format!("+{controller}");
+		match write!(&mut f, "{str_to_write}") {
+			Ok(()) => {
+				println!("Notice: Enabled controller \"{controller}\" for subgroups of {self}");
 			}
+			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+				panic!("Error: Permission denied: cannot enable controller \"{controller}\" in control group {self}");
+			}
+			Err(e) => panic!("Error: Writing to {path:?}: {e}"),
 		}
 	}
 
 	/// Allow the current [`CGroup`] to set restrictions on the given controllers.
-	pub fn enable_controllers(&self, new_controllers: &[&str]) {
+	pub fn enable_controller(&self, controller: &str) {
 		let current_controllers = self.controllers();
-		let needed_controllers = new_controllers
-			.iter()
-			.filter(|c| !current_controllers.iter().any(|x| &x == c))
-			.copied()
-			.collect::<Vec<_>>();
-		if needed_controllers.is_empty() {
+		if current_controllers.iter().any(|c| c == controller) {
 			// Nothing to do
 			return;
 		}
 		let Some(parent) = self.parent() else {
-			panic!("Error: Some controllers are not available on this system: {needed_controllers:?}");
+			panic!("Error: Controller \"{controller}\" not available on this system");
 		};
-		parent.enable_subtree_control(needed_controllers.as_slice());
+		parent.enable_subtree_control(controller);
 	}
 
 	/// Allow the current [`CGroup`] to set the given restriction.
 	pub fn enable_controller_for_restriction(&self, key: &str) {
 		let controller = key.split_once('.').unwrap().0;
-		self.enable_controllers(&[controller])
+		self.enable_controller(controller)
 	}
 
 	/// Sets a restriction based on the key (file name, like "cpu.max") and value (like "90000 100000").
