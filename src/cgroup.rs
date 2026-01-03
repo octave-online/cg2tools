@@ -61,5 +61,7 @@ impl CGroup {
 }
 
 impl AsRef<Path> for CGroup {
-fn as_ref(&self) -> &Path { &self.0 }
+	fn as_ref(&self) -> &Path {
+		&self.0
+	}
 }
