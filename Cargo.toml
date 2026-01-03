@@ -21,3 +21,12 @@ rust-version = "1.75"
 license = "Apache-2.0"
 
 [dependencies]
+clap = { version = "4.5.54", features = ["derive"] }
+
+[[bin]]
+name = "cg2exec"
+path = "src/bin/cg2exec.rs"
+
+[[bin]]
+name = "cg2util"
+path = "src/bin/cg2util.rs"

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-fn main() {
-	println!("Hello, world!");
-}
+mod cgroup;
+pub mod internal;
+
+pub use cgroup::CGroup;
