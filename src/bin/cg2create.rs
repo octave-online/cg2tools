@@ -15,7 +15,6 @@
 use cg2tools::internal;
 use cg2tools::CGroup;
 use clap::Parser;
-use std::process::Command;
 
 #[derive(Parser, Debug)]
 #[command(version, about = "Runs a program with a specific control group")]
@@ -24,18 +23,15 @@ struct Args {
 	#[arg(short = 'g', long)]
 	cgroup: String,
 
-	/// The subcommand to run.
-	#[arg(allow_hyphen_values(true))]
-	cmd: Vec<String>,
+	/// Owner of the new control group, only if the group is newly created.
+	#[arg(short = 'u', long)]
+	user: Option<String>,
 }
 
 fn main() {
 	let args = Args::parse();
 	internal::os_check();
 	let mut cgroup = CGroup::current();
-	if cgroup.append(&args.cgroup) {
-		cgroup.classify_current();
-	}
-	let status = Command::new(&args.cmd[0]).args(&args.cmd[1..]).status().unwrap();
-	std::process::exit(status.code().unwrap_or(0))
+	cgroup.append(&args.cgroup);
+	cgroup.create_and_chown(args.user.as_deref());
 }

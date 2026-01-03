@@ -12,19 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::fs;
+use std::fs::File;
+use std::io::Write;
+use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
+use std::process::Command;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CGroup(PathBuf);
 
 impl CGroup {
+	/// Reads the control group of the current process and returns it.
 	pub fn current() -> Self {
 		Self::from_proc_pid_cgroup(process::id())
 	}
 
+	/// Reads the control group of the given process ID and returns it.
 	pub fn from_proc_pid_cgroup(pid: u32) -> Self {
 		let mut path = PathBuf::from("/proc");
 		path.push(pid.to_string());
@@ -36,32 +43,102 @@ impl CGroup {
 		Self(PathBuf::from(s))
 	}
 
-	pub fn from_path(path: impl AsRef<Path>) -> Self {
+	/// Creates a [`CGroup`] from a path relative to the cgroup file system.
+	pub fn from_cgroup_path(path: impl AsRef<Path>) -> Self {
 		Self(PathBuf::from(path.as_ref()))
 	}
 
-	pub fn as_path(&self) -> &Path {
+	/// Returns this [`CGroup`] as a path relative to the cgroup file system.
+	pub fn as_cgroup_path(&self) -> &Path {
 		&self.0
 	}
 
+	fn cgroupfs_path(&self) -> PathBuf {
+		Path::new("/sys/fs/cgroup").join(&self.0.strip_prefix("/").unwrap())
+	}
+
+	fn cgroupfs_path_if_exists(&self) -> Option<PathBuf> {
+		let path = self.cgroupfs_path();
+		fs::exists(&path).unwrap().then_some(path)
+	}
+
+	/// Classifies the current process into this [`CGroup`].
+	pub fn classify_current(&self) {
+		self.classify(process::id())
+	}
+
+	/// Classifies the given process ID into this [`CGroup`].
+	pub fn classify(&self, pid: u32) {
+		let Some(mut path) = self.cgroupfs_path_if_exists() else {
+			panic!("Control group {self} does not exist");
+		};
+		path.push("cgroup.procs");
+		let mut f = match File::options().append(true).open(&path) {
+			Ok(f) => f,
+			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+				panic!("Permission denied: cannot assign to control group {self}");
+			}
+			Err(e) => panic!("{e}"),
+		};
+		let Ok(()) = write!(&mut f, "{}", pid) else {
+			panic!("Permission denied: cannot detach process from existing cgroup");
+		};
+	}
+
+	/// Returns true if the cgroup was modified.
+	///
 	/// # Examples
 	///
 	/// ```
 	/// use cg2tools::CGroup;
 	///
-	/// let mut cgroup = CGroup::from_path("/a/b/c");
-	/// cgroup.append("d");
-	/// assert_eq!(cgroup.as_path().to_str(), Some("/a/b/c/d"));
-	/// cgroup.append("/e");
-	/// assert_eq!(cgroup.as_path().to_str(), Some("/e"));
+	/// let mut cgroup = CGroup::from_cgroup_path("/a/b/c");
+	/// assert_eq!(cgroup.append("d"), true);
+	/// assert_eq!(cgroup.as_cgroup_path().to_str(), Some("/a/b/c/d"));
+	/// assert_eq!(cgroup.append("/e"), true);
+	/// assert_eq!(cgroup.as_cgroup_path().to_str(), Some("/e"));
+	/// assert_eq!(cgroup.append("/e"), false);
+	/// assert_eq!(cgroup.as_cgroup_path().to_str(), Some("/e"));
 	/// ```
-	pub fn append(&mut self, path: impl AsRef<Path>) {
-		self.0.push(path);
+	pub fn append(&mut self, path: impl AsRef<Path>) -> bool {
+		let new_path = self.0.join(path);
+		if self.0 == new_path {
+			return false;
+		}
+		self.0 = new_path;
+		true
+	}
+
+	/// Creates the CGroup on the filesystem if it doesn't exist yet.
+	///
+	/// If newly created, also sets the owner.
+	pub fn create_and_chown(&self, owner: Option<&str>) {
+		let path = self.cgroupfs_path();
+		let exists = fs::exists(&path).unwrap();
+		if exists {
+			println!("Control group {self} already exists");
+			return;
+		}
+		println!("Creating control group {self}");
+		fs::create_dir_all(&path).unwrap();
+		if let Some(owner) = owner {
+			println!("Setting owner to {owner}");
+			Command::new("chown")
+				.args(&["-R", owner, path.to_str().unwrap()])
+				.output()
+				.unwrap();
+		}
 	}
 }
 
 impl AsRef<Path> for CGroup {
 	fn as_ref(&self) -> &Path {
 		&self.0
+	}
+}
+
+impl fmt::Display for CGroup {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+		self.0.display().fmt(f)
 	}
 }
