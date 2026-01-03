@@ -19,7 +19,7 @@ use std::process::Command;
 
 #[derive(Parser, Debug)]
 #[command(version, about = "Runs a program with a specific control group")]
-struct Args {
+struct Cli {
 	/// Name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
 	#[arg(short = 'g', long)]
 	cgroup: String,
@@ -30,8 +30,8 @@ struct Args {
 }
 
 fn main() {
-	let args = Args::parse();
-	internal::os_check();
+	let args = Cli::parse();
+	internal::os_check(&args);
 	let mut cgroup = CGroup::current();
 	if cgroup.append(&args.cgroup) {
 		cgroup.classify_current();

@@ -24,13 +24,9 @@ license = "Apache-2.0"
 clap = { version = "4.5.54", features = ["derive"] }
 
 [[bin]]
-name = "cg2create"
-path = "src/bin/cg2create.rs"
-
-[[bin]]
 name = "cg2exec"
 path = "src/bin/cg2exec.rs"
 
 [[bin]]
-name = "cg2set"
-path = "src/bin/cg2set.rs"
+name = "cg2util"
+path = "src/bin/cg2util.rs"

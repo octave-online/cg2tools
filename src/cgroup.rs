@@ -16,12 +16,13 @@ use std::fmt;
 use std::fs;
 use std::fs::File;
 use std::io;
+use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
-use std::process::Command;
 
+/// A control group that may or may not exist on disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CGroup(PathBuf);
 
@@ -77,6 +78,11 @@ impl CGroup {
 		true
 	}
 
+	/// Returns the parent of this [`CGroup`] if there is one.
+	pub fn parent(&self) -> Option<Self> {
+		self.0.parent().map(Path::to_path_buf).map(Self)
+	}
+
 	fn cgroupfs_path(&self) -> PathBuf {
 		Path::new("/sys/fs/cgroup").join(&self.0.strip_prefix("/").unwrap())
 	}
@@ -89,7 +95,7 @@ impl CGroup {
 	/// Creates the CGroup on the filesystem if it doesn't exist yet.
 	///
 	/// If newly created, also sets the owner.
-	pub fn create_and_chown(&self, owner: Option<&str>) {
+	pub fn create(&self) {
 		let path = self.cgroupfs_path();
 		let exists = path.try_exists().unwrap();
 		if exists {
@@ -98,13 +104,6 @@ impl CGroup {
 		}
 		println!("Notice: Creating control group {self}");
 		fs::create_dir_all(&path).unwrap();
-		if let Some(owner) = owner {
-			println!("Notice: Setting owner to {owner}");
-			Command::new("chown")
-				.args(&["-R", owner, path.to_str().unwrap()])
-				.output()
-				.unwrap();
-		}
 	}
 
 	/// Classifies the given process ID into this [`CGroup`].
@@ -134,6 +133,73 @@ impl CGroup {
 		self.classify(process::id())
 	}
 
+	/// Loads the controllers enabled for this [`CGroup`].
+	pub fn controllers(&self) -> Vec<String> {
+		let Some(mut path) = self.cgroupfs_path_if_exists() else {
+			panic!("Error: Control group {self} does not exist");
+		};
+		path.push("cgroup.controllers");
+		let mut f = match File::options().read(true).open(&path) {
+			Ok(f) => f,
+			Err(e) => panic!("Error: {e}"),
+		};
+		let mut contents = String::new();
+		f.read_to_string(&mut contents).unwrap();
+		contents.trim().split_whitespace().map(ToString::to_string).collect()
+	}
+
+	/// Allow children of the current [`CGroup`] to set restrictions on the given controllers.
+	pub fn enable_subtree_control(&self, new_controllers: &[&str]) {
+		self.enable_controllers(new_controllers);
+		let Some(mut path) = self.cgroupfs_path_if_exists() else {
+			panic!("Error: Control group {self} does not exist");
+		};
+		path.push("cgroup.subtree_control");
+		let mut f = match File::options().append(true).open(&path) {
+			Ok(f) => f,
+			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+				panic!("Error: Permission denied: cannot change cgroup.subtree_control for control group {self}");
+			}
+			Err(e) => panic!("Error: {e}"),
+		};
+		for controller in new_controllers {
+			// It seems that this needs to be written as one chunk
+			let str_to_write = format!("+{controller}");
+			match write!(&mut f, "{str_to_write}") {
+				Ok(()) => {
+					println!("Notice: Enabled controller \"{controller}\" for subgroups of {self}");
+				}
+				Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+					panic!(
+						"Error: Permission denied: cannot enable controller \"{controller}\" in control group {self}"
+					);
+				}
+				Err(e) => panic!("Error: Writing to {path:?}: {e}"),
+			}
+		}
+	}
+
+	/// Allow the current [`CGroup`] to set restrictions on the given controllers.
+	pub fn enable_controllers(&self, new_controllers: &[&str]) {
+		let current_controllers = self.controllers();
+		let needed_controllers = new_controllers
+			.iter()
+			.filter(|c| !current_controllers.iter().any(|x| &x == c))
+			.copied()
+			.collect::<Vec<_>>();
+		if needed_controllers.is_empty() {
+			// Nothing to do
+			return;
+		}
+		let Some(parent) = self.parent() else {
+			panic!("Error: Some controllers are not available on this system: {needed_controllers:?}");
+		};
+		parent.enable_subtree_control(needed_controllers.as_slice());
+	}
+
+	/// Sets a restriction based on the key (file name, like "cpu.max") and value (like "90000 100000").
+	///
+	/// See <https://docs.kernel.org/admin-guide/cgroup-v2.html>
 	pub fn set_restriction(&self, key: &str, value: &str) {
 		let Some(mut path) = self.cgroupfs_path_if_exists() else {
 			panic!("Error: Control group {self} does not exist");

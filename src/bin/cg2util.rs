@@ -1,0 +1,137 @@
+// Copyright 2026 Octave Online LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use cg2tools::internal;
+use cg2tools::CGroup;
+use clap::Args;
+use clap::Parser;
+use clap::Subcommand;
+
+#[derive(Parser, Debug)]
+#[command(version, about = "Manipulates settings for unified control groups (cgroups v2)")]
+struct Cli {
+	#[command(subcommand)]
+	command: Command,
+}
+
+#[derive(Args, Debug)]
+struct CreateCommand {
+	/// Name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
+	#[arg()]
+	cgroup: String,
+}
+
+#[derive(Args, Debug)]
+struct ControlCommand {
+	/// Name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
+	#[arg()]
+	cgroup: String,
+
+	#[command(flatten)]
+	control: ControlList,
+}
+
+#[derive(Args, Debug)]
+#[group(multiple = false)]
+struct ControlList {
+	/// List of control to enable in the new control group.
+	#[arg(value_delimiter = ',')]
+	controllers: Vec<String>,
+
+	/// Inherit all control from the specified control group, relative to the control group of the current process.
+	#[arg(long, value_name = "CGROUP")]
+	inherit: Option<String>,
+}
+
+impl ControlList {
+	pub fn is_empty(&self) -> bool {
+		self.controllers.is_empty() && self.inherit.is_none()
+	}
+}
+
+#[derive(Args, Debug)]
+struct RestrictCommand {
+	/// Name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
+	#[arg()]
+	cgroup: String,
+
+	/// Restrictions to apply in file=value format, such as "cpu.weight=150". See <https://docs.kernel.org/admin-guide/cgroup-v2.html>
+	#[arg(value_parser = parse_key_value)]
+	restrictions: Vec<(String, String)>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+	/// Creates a new control group
+	Create(CreateCommand),
+	/// Recursively lists or enables controllers in a control group
+	Control(ControlCommand),
+	/// Sets restrictions in a control group
+	Restrict(RestrictCommand),
+}
+
+fn parse_key_value(input: &str) -> Result<(String, String), &'static str> {
+	let (key, value) = input.split_once('=').ok_or("expected key=value")?;
+	if !key.chars().all(|c| matches!(c, '_' | '.' | 'a'..='z')) {
+		return Err("key contains invalid characters");
+	}
+	Ok((key.to_string(), value.to_string()))
+}
+
+fn main() {
+	let args = Cli::parse();
+	internal::os_check(&args);
+	let mut cgroup = CGroup::current();
+	match args.command {
+		Command::Create(cmd_args) => {
+			cgroup.append(&cmd_args.cgroup);
+			cgroup.create();
+		}
+		Command::Control(cmd_args) if cmd_args.control.is_empty() => {
+			cgroup.append(&cmd_args.cgroup);
+			let controllers = cgroup.controllers();
+			println!("Controllers enabled in {cgroup}: {controllers:?}");
+		}
+		Command::Control(cmd_args) => {
+			let new_controllers = if let Some(inherit_cgroup_name) = cmd_args.control.inherit {
+				let mut inherit_cgroup = cgroup.clone();
+				inherit_cgroup.append(&inherit_cgroup_name);
+				inherit_cgroup.controllers()
+			} else {
+				let (enable, disable) = cmd_args
+					.control
+					.controllers
+					.iter()
+					.map(|s| s.as_str())
+					.partition::<Vec<&str>, _>(|c| c.starts_with('+'));
+				if !disable.is_empty() {
+					panic!("Error: controllers may only be enabled for now. Pass them with +, as in: +cpu +memory");
+				}
+				enable
+					.iter()
+					.map(|s| s.strip_prefix('+').unwrap().to_string())
+					.collect()
+			};
+			cgroup.append(&cmd_args.cgroup);
+			let new_controllers = new_controllers.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+			cgroup.enable_controllers(new_controllers.as_slice());
+		}
+		Command::Restrict(cmd_args) => {
+			cgroup.append(&cmd_args.cgroup);
+			for (key, value) in cmd_args.restrictions.iter() {
+				cgroup.set_restriction(key, value);
+			}
+		}
+	}
+}

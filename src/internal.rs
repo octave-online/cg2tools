@@ -14,9 +14,12 @@
 
 //! Internal shared functions
 
-pub fn os_check() {
+use core::fmt;
+
+pub fn os_check(args: impl fmt::Debug) {
 	if cfg!(not(target_os = "linux")) {
-		println!("This tool manipulates Unified Control Groups (cgroups v2), a Linux kernel feature. Since you are not on Linux, this tool is not supported.");
+		println!("Error: This tool manipulates Unified Control Groups (cgroups v2), a Linux kernel feature. Since you are not on Linux, this tool is not supported.");
+		println!("Notice: You passed these args: {args:?}");
 		std::process::exit(1);
 	}
 }
