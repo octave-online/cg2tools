@@ -65,8 +65,8 @@ struct ControlCommand {
 #[group(multiple = false)]
 struct ControlList {
 	/// List of control to enable in the new control group.
-	#[arg(value_delimiter = ',')]
-	controllers: Vec<String>,
+	#[arg(value_delimiter = ',', value_parser = parse_controller_flag)]
+	controllers: Vec<ControllerFlag>,
 
 	/// Inherit all control from the specified control group, relative to the control group of the current process.
 	#[arg(long, value_name = "CGROUP")]
@@ -76,6 +76,23 @@ struct ControlList {
 impl ControlList {
 	pub fn is_empty(&self) -> bool {
 		self.controllers.is_empty() && self.inherit.is_none()
+	}
+}
+
+#[derive(Debug, Clone)]
+struct ControllerFlag {
+	pub name: String,
+	pub enable: bool,
+}
+
+fn parse_controller_flag(input: &str) -> Result<ControllerFlag, &'static str> {
+	if let Some(name) = input.strip_prefix('+') {
+		Ok(ControllerFlag {
+			name: name.to_string(),
+			enable: true,
+		})
+	} else {
+		Err("controllers may only be enabled for now. Pass them with +, as in: +cpu +memory")
 	}
 }
 
@@ -94,6 +111,17 @@ struct RestrictCommand {
 	auto: bool,
 }
 
+fn parse_key_value(input: &str) -> Result<(String, String), &'static str> {
+	let (key, value) = input.split_once('=').ok_or("expected key=value")?;
+	if !key.chars().all(|c| matches!(c, '_' | '.' | 'a'..='z')) {
+		return Err("key contains invalid characters");
+	}
+	if !key.contains('.') {
+		return Err("key must be of the form CONTROLLER.RESTRICTION");
+	}
+	Ok((key.to_string(), value.to_string()))
+}
+
 #[derive(Subcommand, Debug)]
 enum Command {
 	/// Creates a new control group
@@ -104,17 +132,6 @@ enum Command {
 	Control(ControlCommand),
 	/// Sets restrictions in a control group
 	Restrict(RestrictCommand),
-}
-
-fn parse_key_value(input: &str) -> Result<(String, String), &'static str> {
-	let (key, value) = input.split_once('=').ok_or("expected key=value")?;
-	if !key.chars().all(|c| matches!(c, '_' | '.' | 'a'..='z')) {
-		return Err("key contains invalid characters");
-	}
-	if !key.contains('.') {
-		return Err("key must be of the form CONTROLLER.RESTRICTION");
-	}
-	Ok((key.to_string(), value.to_string()))
 }
 
 fn main() {
@@ -144,32 +161,21 @@ fn main() {
 			println!("Controllers enabled in {cgroup}: {controllers:?}");
 		}
 		Command::Control(cmd_args) => {
-			let new_controllers = if let Some(inherit_cgroup_name) = cmd_args.control.inherit {
+			let mut anchor = None;
+			let controllers: Vec<&str> = if let Some(inherit_cgroup_name) = cmd_args.control.inherit {
 				let mut inherit_cgroup = cgroup.clone();
 				inherit_cgroup.append(&inherit_cgroup_name);
 				// Note: even with --auto, don't create the inherit cgroup
-				inherit_cgroup.controllers()
+				let vec = anchor.insert(inherit_cgroup.controllers());
+				vec.iter().map(|s| s.as_str()).collect()
 			} else {
-				let (enable, disable) = cmd_args
-					.control
-					.controllers
-					.iter()
-					.map(|s| s.as_str())
-					.partition::<Vec<&str>, _>(|c| c.starts_with('+'));
-				if !disable.is_empty() {
-					panic!("Error: controllers may only be enabled for now. Pass them with +, as in: +cpu +memory");
-				}
-				enable
-					.iter()
-					.map(|s| s.strip_prefix('+').unwrap().to_string())
-					.collect()
+				cmd_args.control.controllers.iter().map(|c| c.name.as_str()).collect()
 			};
 			cgroup.append(&cmd_args.cgroup);
 			if cmd_args.auto {
 				cgroup.create();
 			}
-			let new_controllers = new_controllers.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-			cgroup.enable_controllers(new_controllers.as_slice());
+			cgroup.enable_controllers(controllers.as_slice());
 		}
 		Command::Restrict(cmd_args) => {
 			cgroup.append(&cmd_args.cgroup);
