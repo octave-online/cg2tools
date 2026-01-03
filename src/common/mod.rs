@@ -12,4 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub const HELLO_WORLD: &str = "hello world";
+use std::process;
+
+pub fn os_check() {
+	if cfg!(not(target_os = "linux")) {
+		println!("This tool manipulates Unified Control Groups (cgroups v2), a Linux kernel feature. Since you are not on Linux, this tool is not supported.");
+		process::exit(1);
+	}
+}
+
+pub fn current_cgroup() {}

@@ -15,5 +15,5 @@
 use cg2tools::common;
 
 fn main() {
-    println!("{}", common::HELLO_WORLD);
+	common::os_check();
 }
