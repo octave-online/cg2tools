@@ -151,6 +151,7 @@ impl CGroup {
 		contents.trim().split_whitespace().map(ToString::to_string).collect()
 	}
 
+	/// Returns whether the cgroup directly owns any processes.
 	pub fn has_processes(&self) -> bool {
 		let Some(mut path) = self.cgroupfs_path_if_exists() else {
 			panic!("Error: Control group {self} does not exist");

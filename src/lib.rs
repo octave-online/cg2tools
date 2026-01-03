@@ -12,7 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! This package contains lightweight CLI tools for manipulating Unified Control Groups (also known as cgroups v2) in the Linux kernel via the cgroupfs.
+//!
+//! The tools are primarily designed for services with `Delegate=yes` in their [systemd configuration](https://systemd.io/CGROUP_DELEGATION/).
+//!
+//! There are currently two tools:
+//!
+//! - `cg2exec` for running subcommands in specific cgroups.
+//! - `cg2util` for configuring cgroups and classifying existing processes.
+//!
+//! For more information, see [the project README](https://github.com/octave-online/cg2tools?tab=readme-ov-file#cg2tools).
+
 mod cgroup;
+
+#[doc(hidden)]
 pub mod internal;
 
 pub use cgroup::CGroup;
