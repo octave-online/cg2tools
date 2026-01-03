@@ -53,42 +53,6 @@ impl CGroup {
 		&self.0
 	}
 
-	fn cgroupfs_path(&self) -> PathBuf {
-		Path::new("/sys/fs/cgroup").join(&self.0.strip_prefix("/").unwrap())
-	}
-
-	fn cgroupfs_path_if_exists(&self) -> Option<PathBuf> {
-		let path = self.cgroupfs_path();
-		fs::exists(&path).unwrap().then_some(path)
-	}
-
-	/// Classifies the current process into this [`CGroup`].
-	pub fn classify_current(&self) {
-		self.classify(process::id())
-	}
-
-	/// Classifies the given process ID into this [`CGroup`].
-	pub fn classify(&self, pid: u32) {
-		let Some(mut path) = self.cgroupfs_path_if_exists() else {
-			panic!("Error: Control group {self} does not exist");
-		};
-		path.push("cgroup.procs");
-		let mut f = match File::options().append(true).open(&path) {
-			Ok(f) => f,
-			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
-				panic!("Error: Permission denied: cannot assign to control group {self}");
-			}
-			Err(e) => panic!("Error: {e}"),
-		};
-		match write!(&mut f, "{}", pid) {
-			Ok(()) => (),
-			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
-				panic!("Error: Permission denied: cannot detach process from existing cgroup");
-			}
-			Err(e) => panic!("Error: {e}"),
-		}
-	}
-
 	/// Returns true if the cgroup was modified.
 	///
 	/// # Examples
@@ -113,12 +77,21 @@ impl CGroup {
 		true
 	}
 
+	fn cgroupfs_path(&self) -> PathBuf {
+		Path::new("/sys/fs/cgroup").join(&self.0.strip_prefix("/").unwrap())
+	}
+
+	fn cgroupfs_path_if_exists(&self) -> Option<PathBuf> {
+		let path = self.cgroupfs_path();
+		path.try_exists().unwrap().then_some(path)
+	}
+
 	/// Creates the CGroup on the filesystem if it doesn't exist yet.
 	///
 	/// If newly created, also sets the owner.
 	pub fn create_and_chown(&self, owner: Option<&str>) {
 		let path = self.cgroupfs_path();
-		let exists = fs::exists(&path).unwrap();
+		let exists = path.try_exists().unwrap();
 		if exists {
 			println!("Notice: Control group {self} already exists");
 			return;
@@ -131,6 +104,56 @@ impl CGroup {
 				.args(&["-R", owner, path.to_str().unwrap()])
 				.output()
 				.unwrap();
+		}
+	}
+
+	/// Classifies the given process ID into this [`CGroup`].
+	pub fn classify(&self, pid: u32) {
+		let Some(mut path) = self.cgroupfs_path_if_exists() else {
+			panic!("Error: Control group {self} does not exist");
+		};
+		path.push("cgroup.procs");
+		let mut f = match File::options().append(true).open(&path) {
+			Ok(f) => f,
+			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+				panic!("Error: Permission denied: cannot assign to control group {self}");
+			}
+			Err(e) => panic!("Error: {e}"),
+		};
+		match write!(&mut f, "{}", pid) {
+			Ok(()) => (),
+			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+				panic!("Error: Permission denied: cannot detach process from existing cgroup");
+			}
+			Err(e) => panic!("Error: {e}"),
+		}
+	}
+
+	/// Classifies the current process into this [`CGroup`].
+	pub fn classify_current(&self) {
+		self.classify(process::id())
+	}
+
+	pub fn set_restriction(&self, key: &str, value: &str) {
+		let Some(mut path) = self.cgroupfs_path_if_exists() else {
+			panic!("Error: Control group {self} does not exist");
+		};
+		path.push(key);
+		let mut f = match File::options().write(true).open(&path) {
+			Ok(f) => f,
+			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+				panic!("Error: Permission denied: cannot set restriction {key} in control group {self}");
+			}
+			Err(e) if e.kind() == io::ErrorKind::NotFound => {
+				panic!("Error: Restriction {key} is unavailable for control group {self}");
+			}
+			Err(e) => panic!("Error: {e}"),
+		};
+		match write!(&mut f, "{}", value) {
+			Ok(()) => {
+				println!("Notice: Restriction {key}=\"{value}\" set in control group {self}");
+			}
+			Err(e) => panic!("Error: {e}"),
 		}
 	}
 }

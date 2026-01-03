@@ -30,3 +30,7 @@ path = "src/bin/cg2create.rs"
 [[bin]]
 name = "cg2exec"
 path = "src/bin/cg2exec.rs"
+
+[[bin]]
+name = "cg2set"
+path = "src/bin/cg2set.rs"
