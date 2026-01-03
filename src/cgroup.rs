@@ -93,13 +93,11 @@ impl CGroup {
 	}
 
 	/// Creates the CGroup on the filesystem if it doesn't exist yet.
-	///
-	/// If newly created, also sets the owner.
 	pub fn create(&self) {
 		let path = self.cgroupfs_path();
 		let exists = path.try_exists().unwrap();
 		if exists {
-			println!("Notice: Control group {self} already exists");
+			// Nothing to do
 			return;
 		}
 		match fs::create_dir_all(&path) {
@@ -216,6 +214,12 @@ impl CGroup {
 			panic!("Error: Some controllers are not available on this system: {needed_controllers:?}");
 		};
 		parent.enable_subtree_control(needed_controllers.as_slice());
+	}
+
+	/// Allow the current [`CGroup`] to set the given restriction.
+	pub fn enable_controller_for_restriction(&self, key: &str) {
+		let controller = key.split_once('.').unwrap().0;
+		self.enable_controllers(&[controller])
 	}
 
 	/// Sets a restriction based on the key (file name, like "cpu.max") and value (like "90000 100000").

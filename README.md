@@ -40,17 +40,23 @@ Use this tool to create and configure control groups.
 
 ```bash
 $ cg2util create my_subgroup
+```
 
-# Equivalent cgroupfs command:
+Equivalent cgroupfs command:
+
+```bash
 $ mkdir /sys/fs/cgroup/path/to/my.service/my_subgroup
 ```
 
-**Example 2:** Reclassify the current process into the new subgroup.
+**Example 2:** Reclassify the current process into a subgroup, creating the subgroup if it doesn't exist.
 
 ```bash
-$ cg2util classify my_subgroup $$
+$ cg2util classify --auto my_subgroup $$
+```
 
-# Equivalent cgroupfs command:
+Equivalent cgroupfs command (does NOT automatically create the group):
+
+```bash
 $ echo $$ > /sys/fs/cgroup/path/to/my.service/my_subgroup/cgroup.procs
 ```
 
@@ -58,17 +64,23 @@ $ echo $$ > /sys/fs/cgroup/path/to/my.service/my_subgroup/cgroup.procs
 
 ```bash
 $ cg2util control /custom/cpulimit +cpu
+```
 
-# Equivalent cgroupfs command:
+Equivalent cgroupfs command:
+
+```bash
 $ echo +cpu > /sys/fs/cgroup/Custom/cgroup.subtree_control
 ```
 
-**Example 4:** Restrict that group to 80% of CPU, enforced in periods lasting 100ms.
+**Example 4:** Restrict the group /custom/cpulimit to 90% of CPU, enforced in periods lasting 100ms. Create the group if it doesn't exist, and allow it to set that restriction.
 
 ```bash
-$ cg2util restrict /custom/cpulimit cpu.max="90000 100000"
+$ cg2util restrict --auto /custom/cpulimit cpu.max="90000 100000"
+```
 
-# Equivalent cgroupfs command:
+Equivalent cgroupfs command (does NOT automatically create the group or enable the controller):
+
+```bash
 $ echo "90000 100000" > /sys/fs/cgroup/Custom/cpulimit/cpu.max
 ```
 
@@ -103,6 +115,44 @@ Create the service as a bash script at `/usr/local/share/cg2tools_demo.sh` (alth
 ```bash
 #!/bin/bash
 
+# Move the main process into a new cgroup called main.
+# We need to do this because we can't reconfigure cgroups
+# that have processes running in them.
+cg2util classify --auto main $$
+
+# Create cgroup subproc and restrict it to 50ms of CPU time every 100ms
+cg2util restrict --auto ../subproc cpu.max=50000
+
+# Create tier1 and tier2 with different CPU weights
+cg2util restrict --auto ../subproc/tier1 cpu.weight=150
+cg2util restrict --auto ../subproc/tier2 cpu.weight=50
+
+# Now let's spawn some subcommands.
+cg2exec ../subproc/tier1 stress -c 1 &
+cg2exec ../subproc/tier2 stress -c 1 &
+
+# Wait 2 minutes and then shut down the service
+sleep 120
+```
+
+If the `stress` command is unavailable, install it from your favorite package manager.
+
+Fire up the new service:
+
+```bash
+$ sudo systemctl daemon-reload
+$ sudo systemctl start cg2tools_demo
+```
+
+Watch the system monitor to see the control group limits in action.
+
+### Example setup without --auto
+
+The equivalent of the above script without using `--auto`:
+
+```bash
+#!/bin/bash
+
 # Create some empty cgroups
 cg2util create main
 cg2util create subproc
@@ -133,17 +183,7 @@ cg2exec ../subproc/tier2 stress -c 1 &
 # Wait 2 minutes and then shut down the service
 sleep 120
 ```
-
-If the `stress` command is unavailable, install it from your favorite package manager.
-
-Fire up the new service:
-
-```bash
-$ sudo systemctl daemon-reload
-$ sudo systemctl start cg2tools_demo
 ```
-
-Watch the system monitor to see the control group limits in action.
 
 ## Copyright and License
 
