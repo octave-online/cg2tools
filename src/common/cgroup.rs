@@ -12,13 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cgroup;
+use std::fs;
+use std::path::PathBuf;
+use std::process;
 
-pub use cgroup::*;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CGroup(PathBuf);
 
-pub fn os_check() {
-	if cfg!(not(target_os = "linux")) {
-		println!("This tool manipulates Unified Control Groups (cgroups v2), a Linux kernel feature. Since you are not on Linux, this tool is not supported.");
-		std::process::exit(1);
+impl CGroup {
+	pub fn current() -> Self {
+		Self::from_proc_pid_cgroup(process::id())
+	}
+
+	pub fn from_proc_pid_cgroup(pid: u32) -> Self {
+		let mut path = PathBuf::from("/proc");
+		path.push(pid.to_string());
+		path.push("cgroup");
+		let file_contents = fs::read_to_string(&path).unwrap();
+		let Some(s) = file_contents.trim().strip_prefix("0::") else {
+			panic!("Unexpected format in cgroup file. Are you using cgroups v1?\n\n{file_contents}");
+		};
+		Self(PathBuf::from(s))
 	}
 }

@@ -13,7 +13,28 @@
 // limitations under the License.
 
 use cg2tools::common;
+use cg2tools::common::CGroup;
+use clap::Parser;
+use std::process::Command;
+
+#[derive(Parser, Debug)]
+#[command(version, about = "Runs a program with a specific control group", long_about = None)]
+struct Args {
+	/// Name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
+	#[arg(short, long)]
+	cgroup: String,
+
+	/// The subcommand to run.
+	#[arg(allow_hyphen_values(true))]
+	cmd: Vec<String>,
+}
 
 fn main() {
+	let args = Args::parse();
 	common::os_check();
+	let current_cgroup = CGroup::current();
+	println!("{current_cgroup:?}");
+	// TODO: Set the cgroup
+	let status = Command::new(&args.cmd[0]).args(&args.cmd[1..]).status().unwrap();
+	std::process::exit(status.code().unwrap_or(0))
 }
