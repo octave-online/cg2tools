@@ -5,7 +5,7 @@ This package contains lightweight CLI tools for manipulating Unified Control Gro
 
 The tools are primarily designed for services with `Delegate=yes` in their [systemd configuration](https://systemd.io/CGROUP_DELEGATION/).
 
-***Why use cg2tools instead of writing directly to cgroupfs?*** Relying on bash or python scripting is error-prone, and cgroupfs has a steep learning curve. cg2tools is built for the community of Linux developers who wish to use control groups with ergonomic CLI tools, such as the ones we had with cgroups v1.
+***Why use cg2tools instead of writing directly to cgroupfs?*** Relying on bash or python scripting is error-prone, and cgroupfs has a steep learning curve. cg2tools is built for the community of Linux developers who wish to use control groups with ergonomic CLI tools, such as the ones we had with cgroups v1. `cg2exec` in particular is a command that has no good equivalent in cgroupfs.
 
 ## Tools
 
@@ -40,24 +40,36 @@ Use this tool to create and configure control groups.
 
 ```bash
 $ cg2util create my_subgroup
+
+# Equivalent cgroupfs command:
+$ mkdir /sys/fs/cgroup/path/to/my.service/my_subgroup
 ```
 
 **Example 2:** Reclassify the current process into the new subgroup.
 
 ```bash
 $ cg2util classify my_subgroup $$
+
+# Equivalent cgroupfs command:
+$ echo $$ > /sys/fs/cgroup/path/to/my.service/my_subgroup/cgroup.procs
 ```
 
 **Example 3:** Allow the group /custom/cpulimit to manipulate CPU restrictions.
 
 ```bash
 $ cg2util control /custom/cpulimit +cpu
+
+# Equivalent cgroupfs command:
+$ echo +cpu > /sys/fs/cgroup/Custom/cgroup.subtree_control
 ```
 
 **Example 4:** Restrict that group to 80% of CPU, enforced in periods lasting 100ms.
 
 ```bash
 $ cg2util restrict /custom/cpulimit cpu.max="90000 100000"
+
+# Equivalent cgroupfs command:
+$ echo "90000 100000" > /sys/fs/cgroup/Custom/cpulimit/cpu.max
 ```
 
 ## Installation
