@@ -15,8 +15,8 @@
 use std::fmt;
 use std::fs;
 use std::fs::File;
-use std::io::Write;
 use std::io;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
@@ -38,7 +38,7 @@ impl CGroup {
 		path.push("cgroup");
 		let file_contents = fs::read_to_string(&path).unwrap();
 		let Some(s) = file_contents.trim().strip_prefix("0::") else {
-			panic!("Unexpected format in cgroup file. Are you using cgroups v1?\n\n{file_contents}");
+			panic!("Error: Unexpected format in cgroup file. Are you using cgroups v1?\n\n{file_contents}");
 		};
 		Self(PathBuf::from(s))
 	}
@@ -70,19 +70,23 @@ impl CGroup {
 	/// Classifies the given process ID into this [`CGroup`].
 	pub fn classify(&self, pid: u32) {
 		let Some(mut path) = self.cgroupfs_path_if_exists() else {
-			panic!("Control group {self} does not exist");
+			panic!("Error: Control group {self} does not exist");
 		};
 		path.push("cgroup.procs");
 		let mut f = match File::options().append(true).open(&path) {
 			Ok(f) => f,
 			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
-				panic!("Permission denied: cannot assign to control group {self}");
+				panic!("Error: Permission denied: cannot assign to control group {self}");
 			}
-			Err(e) => panic!("{e}"),
+			Err(e) => panic!("Error: {e}"),
 		};
-		let Ok(()) = write!(&mut f, "{}", pid) else {
-			panic!("Permission denied: cannot detach process from existing cgroup");
-		};
+		match write!(&mut f, "{}", pid) {
+			Ok(()) => (),
+			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+				panic!("Error: Permission denied: cannot detach process from existing cgroup");
+			}
+			Err(e) => panic!("Error: {e}"),
+		}
 	}
 
 	/// Returns true if the cgroup was modified.
@@ -116,13 +120,13 @@ impl CGroup {
 		let path = self.cgroupfs_path();
 		let exists = fs::exists(&path).unwrap();
 		if exists {
-			println!("Control group {self} already exists");
+			println!("Notice: Control group {self} already exists");
 			return;
 		}
-		println!("Creating control group {self}");
+		println!("Notice: Creating control group {self}");
 		fs::create_dir_all(&path).unwrap();
 		if let Some(owner) = owner {
-			println!("Setting owner to {owner}");
+			println!("Notice: Setting owner to {owner}");
 			Command::new("chown")
 				.args(&["-R", owner, path.to_str().unwrap()])
 				.output()
