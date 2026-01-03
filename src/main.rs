@@ -13,5 +13,5 @@
 // limitations under the License.
 
 fn main() {
-    println!("Hello, world!");
+	println!("Hello, world!");
 }
