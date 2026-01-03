@@ -47,11 +47,13 @@ impl CGroup {
 	/// # Examples
 	///
 	/// ```
-	/// use cg2tools::common::CGroup;
+	/// use cg2tools::CGroup;
 	///
 	/// let mut cgroup = CGroup::from_path("/a/b/c");
 	/// cgroup.append("d");
 	/// assert_eq!(cgroup.as_path().to_str(), Some("/a/b/c/d"));
+	/// cgroup.append("/e");
+	/// assert_eq!(cgroup.as_path().to_str(), Some("/e"));
 	/// ```
 	pub fn append(&mut self, path: impl AsRef<Path>) {
 		self.0.push(path);
