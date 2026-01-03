@@ -15,11 +15,11 @@
 [package]
 name = "cg2tools"
 description = "CLI for delegated unified control groups (cgroups v2)"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 rust-version = "1.75"
 license = "Apache-2.0"
-keywords = ["cg2exec", "cg2util", "cgroup", "cgroups", "cgexec", "libcgroup"]
+keywords = ["cg2exec", "cg2util", "cgroup", "cgexec", "libcgroup"]
 
 [dependencies]
 clap = { version = "4.5.54", features = ["derive"] }
