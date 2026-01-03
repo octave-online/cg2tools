@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cgroup;
-
-pub use cgroup::*;
+//! Internal shared functions
 
 pub fn os_check() {
 	if cfg!(not(target_os = "linux")) {

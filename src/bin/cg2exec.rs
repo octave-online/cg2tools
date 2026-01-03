@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use cg2tools::common;
-use cg2tools::common::CGroup;
+use cg2tools::internal;
+use cg2tools::CGroup;
 use clap::Parser;
 use std::process::Command;
 
@@ -31,7 +31,7 @@ struct Args {
 
 fn main() {
 	let args = Args::parse();
-	common::os_check();
+	internal::os_check();
 	let current_cgroup = CGroup::current();
 	println!("{current_cgroup:?}");
 	// TODO: Set the cgroup
