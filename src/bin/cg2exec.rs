@@ -21,7 +21,7 @@ use std::process::Command;
 #[command(version, about = "Runs a program with a specific control group")]
 struct Cli {
 	/// Name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
-	#[arg(short = 'g', long)]
+	#[arg()]
 	cgroup: String,
 
 	/// The subcommand to run.
