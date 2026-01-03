@@ -102,8 +102,11 @@ impl CGroup {
 			println!("Notice: Control group {self} already exists");
 			return;
 		}
-		println!("Notice: Creating control group {self}");
-		fs::create_dir_all(&path).unwrap();
+		match fs::create_dir_all(&path) {
+			Ok(()) => (),
+			Err(e) => panic!("Error: While creating control group {self}: {e}"),
+		}
+		println!("Notice: Created control group {self}");
 	}
 
 	/// Classifies the given process ID into this [`CGroup`].
@@ -117,14 +120,14 @@ impl CGroup {
 			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
 				panic!("Error: Permission denied: cannot assign to control group {self}");
 			}
-			Err(e) => panic!("Error: {e}"),
+			Err(e) => panic!("Error: While assigning {pid} to control group {self}: {e}"),
 		};
 		match write!(&mut f, "{}", pid) {
 			Ok(()) => (),
 			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
 				panic!("Error: Permission denied: cannot detach process from existing cgroup");
 			}
-			Err(e) => panic!("Error: {e}"),
+			Err(e) => panic!("Error: While assigning {pid} to control group {self}: {e}"),
 		}
 	}
 
@@ -141,15 +144,32 @@ impl CGroup {
 		path.push("cgroup.controllers");
 		let mut f = match File::options().read(true).open(&path) {
 			Ok(f) => f,
-			Err(e) => panic!("Error: {e}"),
+			Err(e) => panic!("Error: While loading the controllers of {self}: {e}"),
 		};
 		let mut contents = String::new();
 		f.read_to_string(&mut contents).unwrap();
 		contents.trim().split_whitespace().map(ToString::to_string).collect()
 	}
 
+	pub fn has_processes(&self) -> bool {
+		let Some(mut path) = self.cgroupfs_path_if_exists() else {
+			panic!("Error: Control group {self} does not exist");
+		};
+		path.push("cgroup.procs");
+		let mut f = match File::options().read(true).open(&path) {
+			Ok(f) => f,
+			Err(e) => panic!("Error: While loading the processes of {self}: {e}"),
+		};
+		let mut contents = String::new();
+		f.read_to_string(&mut contents).unwrap();
+		!contents.trim().is_empty()
+	}
+
 	/// Allow children of the current [`CGroup`] to set restrictions on the given controllers.
 	pub fn enable_subtree_control(&self, new_controllers: &[&str]) {
+		if self.has_processes() {
+			println!("Warning: Control group {self} owns one or more processes. Enabling controllers in children of nonempty control groups can cause unexpected behavior. For example, a domain cgroup might turned into a threaded domain. See <https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html>")
+		}
 		self.enable_controllers(new_controllers);
 		let Some(mut path) = self.cgroupfs_path_if_exists() else {
 			panic!("Error: Control group {self} does not exist");
@@ -160,7 +180,7 @@ impl CGroup {
 			Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
 				panic!("Error: Permission denied: cannot change cgroup.subtree_control for control group {self}");
 			}
-			Err(e) => panic!("Error: {e}"),
+			Err(e) => panic!("Error: Opening {path:?}: {e}"),
 		};
 		for controller in new_controllers {
 			// It seems that this needs to be written as one chunk
@@ -219,7 +239,7 @@ impl CGroup {
 			Ok(()) => {
 				println!("Notice: Restriction {key}=\"{value}\" set in control group {self}");
 			}
-			Err(e) => panic!("Error: {e}"),
+			Err(e) => panic!("Error: While writing to {path:?}: {e}"),
 		}
 	}
 }
