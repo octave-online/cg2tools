@@ -18,7 +18,7 @@ use clap::Parser;
 use std::process::Command;
 
 #[derive(Parser, Debug)]
-#[command(version, about = "Runs a program with a specific control group", long_about = None)]
+#[command(version, about = "Runs a program with a specific control group")]
 struct Args {
 	/// Name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
 	#[arg(short, long)]

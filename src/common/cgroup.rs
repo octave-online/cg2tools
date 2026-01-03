@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process;
 
@@ -34,4 +35,29 @@ impl CGroup {
 		};
 		Self(PathBuf::from(s))
 	}
+
+	pub fn from_path(path: impl AsRef<Path>) -> Self {
+		Self(PathBuf::from(path.as_ref()))
+	}
+
+	pub fn as_path(&self) -> &Path {
+		&self.0
+	}
+
+	/// # Examples
+	///
+	/// ```
+	/// use cg2tools::common::CGroup;
+	///
+	/// let mut cgroup = CGroup::from_path("/a/b/c");
+	/// cgroup.append("d");
+	/// assert_eq!(cgroup.as_path().to_str(), Some("/a/b/c/d"));
+	/// ```
+	pub fn append(&mut self, path: impl AsRef<Path>) {
+		self.0.push(path);
+	}
+}
+
+impl AsRef<Path> for CGroup {
+fn as_ref(&self) -> &Path { &self.0 }
 }
