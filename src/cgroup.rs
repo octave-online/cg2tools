@@ -168,7 +168,7 @@ impl CGroup {
 	/// Allow children of the current [`CGroup`] to set restrictions on the given controllers.
 	pub fn enable_subtree_control(&self, new_controllers: &[&str]) {
 		if self.has_processes() {
-			println!("Warning: Control group {self} owns one or more processes. Enabling controllers in children of nonempty control groups can cause unexpected behavior. For example, a domain cgroup might turned into a threaded domain. See <https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html>")
+			println!("Warning: Control group {self} owns one or more processes. Enabling controllers in children of nonempty control groups can cause unexpected behavior. For example, a domain cgroup might turned into a threaded domain. See <https://docs.kernel.org/admin-guide/cgroup-v2.html>")
 		}
 		self.enable_controllers(new_controllers);
 		let Some(mut path) = self.cgroupfs_path_if_exists() else {

@@ -5,12 +5,14 @@ This package contains lightweight CLI tools for manipulating Unified Control Gro
 
 The tools are primarily designed for services with `Delegate=yes` in their [systemd configuration](https://systemd.io/CGROUP_DELEGATION/).
 
+***Why use cg2tools instead of writing directly to cgroupfs?*** Relying on bash or python scripting is error-prone, and cgroupfs has a steep learning curve. cg2tools is built for the community of Linux developers who wish to use control groups with ergonomic CLI tools, such as the ones we had with cgroups v1.
+
 ## Tools
 
 There are currently two tools:
 
 - `cg2exec` for running subcommands in specific cgroups.
-- `cg2util` for configuring cgroups.
+- `cg2util` for configuring cgroups and classifying existing processes.
 
 Control groups can be specified as either relative or absolute paths.
 
@@ -40,16 +42,22 @@ Use this tool to create and configure control groups.
 $ cg2util create my_subgroup
 ```
 
-**Example 2:** Allow the subgroup to manipulate CPU restrictions.
+**Example 2:** Reclassify the current process into the new subgroup.
 
 ```bash
-$ cg2util control my_subgroup +cpu
+$ cg2util classify my_subgroup $$
 ```
 
-**Example 3:** Restrict the subgroup to 80% of CPU, enforced in periods lasting 100ms.
+**Example 3:** Allow the group /custom/cpulimit to manipulate CPU restrictions.
 
 ```bash
-$ cg2util restrict my_subgroup cpu.max="90000 100000"
+$ cg2util control /custom/cpulimit +cpu
+```
+
+**Example 4:** Restrict that group to 80% of CPU, enforced in periods lasting 100ms.
+
+```bash
+$ cg2util restrict /custom/cpulimit cpu.max="90000 100000"
 ```
 
 ## Installation
@@ -58,7 +66,72 @@ Install from the Cargo package manager.
 
 ## Example: Integration with systemd service
 
-To be added soon.
+This example will use an unprivileged user to demonstrate that root permissions are not required by the service:
+
+```bash
+$ useradd -m -u 1500 cg2tools_user;
+```
+
+Create the service config at `/etc/systemd/system/cg2tools_demo.service`
+
+```ini
+[Service]
+ExecStart=/usr/local/share/cg2tools_demo.sh
+User=cg2tools_user
+Group=cg2tools_user
+Restart=no
+Delegate=yes
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Create the service as a bash script at `/usr/local/share/cg2tools_demo.sh` (although with cg2tools, a bash script wrapper is not compulsory)
+
+```bash
+#!/bin/bash
+
+# Create some empty cgroups
+cg2util create main
+cg2util create subproc
+cg2util create subproc/tier1
+cg2util create subproc/tier2
+
+# Move the main process into the main cgroup.
+# We need to do this because we can't reconfigure cgroups
+# that have processes running in them.
+cg2util classify main $$
+
+# Enable CPU limits on the other cgroups
+cg2util control ../subproc +cpu
+cg2util control ../subproc/tier1 +cpu
+cg2util control ../subproc/tier2 +cpu
+
+# Restrict subproc to 50ms of CPU time every 100ms
+cg2util restrict ../subproc cpu.max=50000
+
+# Give tier1 more CPU weight than tier2
+cg2util restrict ../subproc/tier1 cpu.weight=150
+cg2util restrict ../subproc/tier2 cpu.weight=50
+
+# Now let's spawn some subcommands.
+cg2exec ../subproc/tier1 stress -c 1 &
+cg2exec ../subproc/tier2 stress -c 1 &
+
+# Wait 2 minutes and then shut down the service
+sleep 120
+```
+
+If the `stress` command is unavailable, install it from your favorite package manager.
+
+Fire up the new service:
+
+```bash
+$ sudo systemctl daemon-reload
+$ sudo systemctl start cg2tools_demo
+```
+
+Watch the system monitor to see the control group limits in action.
 
 ## Copyright and License
 
