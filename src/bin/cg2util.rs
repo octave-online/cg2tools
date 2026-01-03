@@ -33,6 +33,17 @@ struct CreateCommand {
 }
 
 #[derive(Args, Debug)]
+struct ClassifyCommand {
+	/// Name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
+	#[arg()]
+	cgroup: String,
+
+	/// Process IDs to reclassify.
+	#[arg(value_delimiter = ',')]
+	pids: Vec<u32>,
+}
+
+#[derive(Args, Debug)]
 struct ControlCommand {
 	/// Name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
 	#[arg()]
@@ -75,6 +86,8 @@ struct RestrictCommand {
 enum Command {
 	/// Creates a new control group
 	Create(CreateCommand),
+	/// Moves a running process to a different control group
+	Classify(ClassifyCommand),
 	/// Recursively lists or enables controllers in a control group
 	Control(ControlCommand),
 	/// Sets restrictions in a control group
@@ -97,6 +110,12 @@ fn main() {
 		Command::Create(cmd_args) => {
 			cgroup.append(&cmd_args.cgroup);
 			cgroup.create();
+		}
+		Command::Classify(cmd_args) => {
+			cgroup.append(&cmd_args.cgroup);
+			for pid in cmd_args.pids {
+				cgroup.classify(pid);
+			}
 		}
 		Command::Control(cmd_args) if cmd_args.control.is_empty() => {
 			cgroup.append(&cmd_args.cgroup);
