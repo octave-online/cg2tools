@@ -25,8 +25,12 @@ struct Cli {
 	cgroup: String,
 
 	/// The subcommand to run.
-	#[arg(allow_hyphen_values(true), required = true)]
-	cmd: Vec<String>,
+	#[arg()]
+	cmd: String,
+
+	/// Arguments to the subcommand.
+	#[arg(allow_hyphen_values(true))]
+	args: Vec<String>,
 }
 
 fn main() {
@@ -36,7 +40,7 @@ fn main() {
 	if cgroup.append(&args.cgroup) {
 		cgroup.classify_current();
 	}
-	let status = Command::new(&args.cmd[0]).args(&args.cmd[1..]).status().unwrap();
+	let status = Command::new(&args.cmd).args(&args.args).status().unwrap();
 	std::process::exit(status.code().unwrap_or(0))
 }
 

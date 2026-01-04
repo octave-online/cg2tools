@@ -5,8 +5,8 @@ expression: "cli(\"cg2exec grp cmd --flag\")"
 Ok(
     Cli {
         cgroup: "grp",
-        cmd: [
-            "cmd",
+        cmd: "cmd",
+        args: [
             "--flag",
         ],
     },
