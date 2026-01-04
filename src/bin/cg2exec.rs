@@ -119,7 +119,7 @@ impl TryFrom<RawArgs> for CliHelp {
 }
 
 fn print_usage(bin_name: &OsStr, mut sink: impl Write) -> Result<(), io::Error> {
-	writeln!(sink, "Usage: {} <CGROUP> <CMD> [ARGS]...", bin_name.display())
+	writeln!(sink, "Usage: {} <CGROUP> <CMD> [ARGS]...", bin_name.to_string_lossy())
 }
 
 impl Cli {
@@ -170,7 +170,7 @@ fn test_cli() {
 		let mut buf = Vec::<u8>::new();
 		match Cli::try_from_tokens(tokens.iter(), &mut buf) {
 			Ok(args) => Ok(args),
-			Err(_code) => Err(String::from_utf8(buf).unwrap())
+			Err(_code) => Err(String::from_utf8(buf).unwrap()),
 		}
 	}
 	insta::assert_debug_snapshot!(cli("cg2exec"));
