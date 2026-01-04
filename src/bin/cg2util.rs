@@ -39,7 +39,7 @@ struct ClassifyCommand {
 	cgroup: String,
 
 	/// Process IDs to reclassify.
-	#[arg(value_delimiter = ',')]
+	#[arg(value_delimiter = ',', required = true)]
 	pids: Vec<u32>,
 
 	/// Create the control group if it doesn't exist yet.
@@ -65,18 +65,12 @@ struct ControlCommand {
 #[group(multiple = false)]
 struct ControlList {
 	/// List of control to enable in the new control group.
-	#[arg(value_delimiter = ',', value_parser = parse_controller_flag)]
+	#[arg(value_delimiter = ',', allow_hyphen_values(true), value_parser = parse_controller_flag)]
 	controllers: Vec<ControllerFlag>,
 
 	/// Inherit all control from the specified control group, relative to the control group of the current process.
 	#[arg(long, value_name = "CGROUP")]
 	inherit: Option<String>,
-}
-
-impl ControlList {
-	pub fn is_empty(&self) -> bool {
-		self.controllers.is_empty() && self.inherit.is_none()
-	}
 }
 
 #[derive(Debug, Clone)]
@@ -103,7 +97,7 @@ struct RestrictCommand {
 	cgroup: String,
 
 	/// Restrictions to apply in file=value format, such as "cpu.weight=150". See <https://docs.kernel.org/admin-guide/cgroup-v2.html>
-	#[arg(value_parser = parse_key_value)]
+	#[arg(value_parser = parse_key_value, required = true)]
 	restrictions: Vec<(String, String)>,
 
 	/// Create the control group if it doesn't exist yet and enable the required controllers if they aren't enabled yet.
@@ -172,7 +166,7 @@ fn main() {
 				cgroup.enable_controller(&*controller);
 			}
 		}
-		Command::Control(cmd_args) if cmd_args.control.is_empty() => {
+		Command::Control(cmd_args) if cmd_args.control.controllers.is_empty() => {
 			cgroup.append(&cmd_args.cgroup);
 			if cmd_args.auto {
 				cgroup.create();
@@ -202,4 +196,83 @@ fn main() {
 			}
 		}
 	}
+}
+
+#[test]
+fn test_cli_create() {
+	fn cli(input: &str) -> Result<Cli, String> {
+		Cli::try_parse_from(shlex::split(input).unwrap()).map_err(|e| format!("{e}"))
+	}
+	insta::assert_debug_snapshot!(cli("cg2util"));
+	insta::assert_debug_snapshot!(cli("cg2util xyz"));
+	insta::assert_debug_snapshot!(cli("cg2util create"));
+	insta::assert_debug_snapshot!(cli("cg2util create grp"));
+	insta::assert_debug_snapshot!(cli("cg2util create grp extra"));
+	insta::assert_debug_snapshot!(cli("cg2util --auto create grp"));
+	insta::assert_debug_snapshot!(cli("cg2util create --auto grp"));
+	insta::assert_debug_snapshot!(cli("cg2util create grp --auto"));
+}
+
+#[test]
+fn test_cli_classify() {
+	fn cli(input: &str) -> Result<Cli, String> {
+		Cli::try_parse_from(shlex::split(input).unwrap()).map_err(|e| format!("{e}"))
+	}
+	insta::assert_debug_snapshot!(cli("cg2util classify"));
+	insta::assert_debug_snapshot!(cli("cg2util classify grp"));
+	insta::assert_debug_snapshot!(cli("cg2util classify grp pid"));
+	insta::assert_debug_snapshot!(cli("cg2util classify grp 123"));
+	insta::assert_debug_snapshot!(cli("cg2util classify grp 123 456"));
+	insta::assert_debug_snapshot!(cli("cg2util classify grp 123,456"));
+	insta::assert_debug_snapshot!(cli("cg2util classify grp 123 extra"));
+	insta::assert_debug_snapshot!(cli("cg2util --auto classify grp 123"));
+	insta::assert_debug_snapshot!(cli("cg2util classify --auto grp 123"));
+	insta::assert_debug_snapshot!(cli("cg2util classify grp --auto 123"));
+	insta::assert_debug_snapshot!(cli("cg2util classify grp 123 --auto"));
+}
+
+#[test]
+fn test_cli_control() {
+	fn cli(input: &str) -> Result<Cli, String> {
+		Cli::try_parse_from(shlex::split(input).unwrap()).map_err(|e| format!("{e}"))
+	}
+	insta::assert_debug_snapshot!(cli("cg2util control"));
+	insta::assert_debug_snapshot!(cli("cg2util control grp"));
+	insta::assert_debug_snapshot!(cli("cg2util control grp +cpu"));
+	insta::assert_debug_snapshot!(cli("cg2util control grp +cpu +memory"));
+	insta::assert_debug_snapshot!(cli("cg2util control grp +cpu,+memory"));
+	insta::assert_debug_snapshot!(cli("cg2util control grp -cpu +memory"));
+	insta::assert_debug_snapshot!(cli("cg2util --auto control grp"));
+	insta::assert_debug_snapshot!(cli("cg2util control --auto grp"));
+	insta::assert_debug_snapshot!(cli("cg2util control grp --auto"));
+	insta::assert_debug_snapshot!(cli("cg2util --auto control grp +cpu +memory"));
+	insta::assert_debug_snapshot!(cli("cg2util control --auto grp +cpu +memory"));
+	insta::assert_debug_snapshot!(cli("cg2util control grp --auto +cpu +memory"));
+	insta::assert_debug_snapshot!(cli("cg2util control grp +cpu --auto +memory"));
+	insta::assert_debug_snapshot!(cli("cg2util --inherit igrp control grp"));
+	insta::assert_debug_snapshot!(cli("cg2util control --inherit igrp grp"));
+	insta::assert_debug_snapshot!(cli("cg2util control grp --inherit igrp"));
+	insta::assert_debug_snapshot!(cli("cg2util control grp --inherit=igrp"));
+	insta::assert_debug_snapshot!(cli("cg2util control grp --inherit igrp +cpu"));
+	insta::assert_debug_snapshot!(cli("cg2util control grp --inherit +cpu"));
+}
+
+#[test]
+fn test_cli_restrict() {
+	fn cli(input: &str) -> Result<Cli, String> {
+		Cli::try_parse_from(shlex::split(input).unwrap()).map_err(|e| format!("{e}"))
+	}
+	insta::assert_debug_snapshot!(cli("cg2util restrict"));
+	insta::assert_debug_snapshot!(cli("cg2util restrict grp"));
+	insta::assert_debug_snapshot!(cli("cg2util restrict grp cpu"));
+	insta::assert_debug_snapshot!(cli("cg2util restrict grp cpu.max"));
+	insta::assert_debug_snapshot!(cli("cg2util restrict grp cpu=90000"));
+	insta::assert_debug_snapshot!(cli("cg2util restrict grp cpu.max=90000"));
+	insta::assert_debug_snapshot!(cli("cg2util restrict grp cpu.max=90000 cpu.weight=100"));
+	insta::assert_debug_snapshot!(cli("cg2util restrict grp a.b=c,d"));
+	insta::assert_debug_snapshot!(cli("cg2util restrict grp cpu.max=90000 extra"));
+	insta::assert_debug_snapshot!(cli("cg2util --auto restrict grp cpu.max=90000"));
+	insta::assert_debug_snapshot!(cli("cg2util restrict --auto grp cpu.max=90000"));
+	insta::assert_debug_snapshot!(cli("cg2util restrict grp --auto cpu.max=90000"));
+	insta::assert_debug_snapshot!(cli("cg2util restrict grp cpu.max=90000 --auto"));
 }

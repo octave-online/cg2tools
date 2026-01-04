@@ -1,0 +1,13 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util create grp\")"
+---
+Ok(
+    Cli {
+        command: Create(
+            CreateCommand {
+                cgroup: "grp",
+            },
+        ),
+    },
+)

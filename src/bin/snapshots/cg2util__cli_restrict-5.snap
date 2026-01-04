@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util restrict grp cpu=90000\")"
+---
+Err(
+    "error: invalid value 'cpu=90000' for '<RESTRICTIONS>...': key must be of the form CONTROLLER.RESTRICTION\n\nFor more information, try '--help'.\n",
+)

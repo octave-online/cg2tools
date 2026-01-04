@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util create\")"
+---
+Err(
+    "error: the following required arguments were not provided:\n  <CGROUP>\n\nUsage: cg2util create <CGROUP>\n\nFor more information, try '--help'.\n",
+)

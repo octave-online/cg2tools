@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util restrict grp cpu\")"
+---
+Err(
+    "error: invalid value 'cpu' for '<RESTRICTIONS>...': expected key=value\n\nFor more information, try '--help'.\n",
+)

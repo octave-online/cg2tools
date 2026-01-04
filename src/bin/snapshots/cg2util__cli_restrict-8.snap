@@ -1,0 +1,20 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util restrict grp a.b=c,d\")"
+---
+Ok(
+    Cli {
+        command: Restrict(
+            RestrictCommand {
+                cgroup: "grp",
+                restrictions: [
+                    (
+                        "a.b",
+                        "c,d",
+                    ),
+                ],
+                auto: false,
+            },
+        ),
+    },
+)

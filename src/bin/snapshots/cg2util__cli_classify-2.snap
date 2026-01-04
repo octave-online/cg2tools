@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util classify grp\")"
+---
+Err(
+    "error: the following required arguments were not provided:\n  <PIDS>...\n\nUsage: cg2util classify <CGROUP> <PIDS>...\n\nFor more information, try '--help'.\n",
+)

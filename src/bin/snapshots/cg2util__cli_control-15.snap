@@ -1,0 +1,20 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util control --inherit igrp grp\")"
+---
+Ok(
+    Cli {
+        command: Control(
+            ControlCommand {
+                cgroup: "grp",
+                control: ControlList {
+                    controllers: [],
+                    inherit: Some(
+                        "igrp",
+                    ),
+                },
+                auto: false,
+            },
+        ),
+    },
+)

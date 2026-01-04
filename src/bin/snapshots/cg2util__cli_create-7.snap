@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util create --auto grp\")"
+---
+Err(
+    "error: unexpected argument '--auto' found\n\n  tip: to pass '--auto' as a value, use '-- --auto'\n\nUsage: cg2util create <CGROUP>\n\nFor more information, try '--help'.\n",
+)

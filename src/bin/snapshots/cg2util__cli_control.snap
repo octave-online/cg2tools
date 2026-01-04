@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util control\")"
+---
+Err(
+    "error: the following required arguments were not provided:\n  <CGROUP>\n\nUsage: cg2util control <CGROUP> [CONTROLLERS]...\n\nFor more information, try '--help'.\n",
+)

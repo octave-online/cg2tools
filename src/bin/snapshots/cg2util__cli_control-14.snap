@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util --inherit igrp control grp\")"
+---
+Err(
+    "error: unexpected argument '--inherit' found\n\n  tip: 'control --inherit' exists\n\nUsage: cg2util <COMMAND>\n\nFor more information, try '--help'.\n",
+)

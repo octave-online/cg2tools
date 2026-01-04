@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util control grp +cpu --auto +memory\")"
+---
+Err(
+    "error: invalid value '--auto' for '[CONTROLLERS]...': controllers may only be enabled for now. Pass them with +, as in: +cpu +memory\n\nFor more information, try '--help'.\n",
+)

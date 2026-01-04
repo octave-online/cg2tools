@@ -25,7 +25,7 @@ struct Cli {
 	cgroup: String,
 
 	/// The subcommand to run.
-	#[arg(allow_hyphen_values(true))]
+	#[arg(allow_hyphen_values(true), required = true)]
 	cmd: Vec<String>,
 }
 
@@ -38,4 +38,18 @@ fn main() {
 	}
 	let status = Command::new(&args.cmd[0]).args(&args.cmd[1..]).status().unwrap();
 	std::process::exit(status.code().unwrap_or(0))
+}
+
+#[test]
+fn test_cli() {
+	fn cli(input: &str) -> Result<Cli, String> {
+		Cli::try_parse_from(shlex::split(input).unwrap()).map_err(|e| format!("{e}"))
+	}
+	insta::assert_debug_snapshot!(cli("cg2exec"));
+	insta::assert_debug_snapshot!(cli("cg2exec grp"));
+	insta::assert_debug_snapshot!(cli("cg2exec grp cmd"));
+	insta::assert_debug_snapshot!(cli("cg2exec grp cmd extra"));
+	insta::assert_debug_snapshot!(cli("cg2exec --flag grp cmd"));
+	insta::assert_debug_snapshot!(cli("cg2exec grp --flag cmd"));
+	insta::assert_debug_snapshot!(cli("cg2exec grp cmd --flag"));
 }

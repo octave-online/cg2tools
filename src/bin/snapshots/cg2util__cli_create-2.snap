@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util xyz\")"
+---
+Err(
+    "error: unrecognized subcommand 'xyz'\n\nUsage: cg2util <COMMAND>\n\nFor more information, try '--help'.\n",
+)

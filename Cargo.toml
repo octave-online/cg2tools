@@ -24,6 +24,10 @@ keywords = ["cgroup", "cgroups", "systemd", "cgexec", "libcgroup"]
 [dependencies]
 clap = { version = "4.5.54", features = ["derive"] }
 
+[dev-dependencies]
+insta = "1"
+shlex = "1"
+
 [[bin]]
 name = "cg2exec"
 path = "src/bin/cg2exec.rs"

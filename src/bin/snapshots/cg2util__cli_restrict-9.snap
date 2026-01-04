@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util restrict grp cpu.max=90000 extra\")"
+---
+Err(
+    "error: invalid value 'extra' for '<RESTRICTIONS>...': expected key=value\n\nFor more information, try '--help'.\n",
+)

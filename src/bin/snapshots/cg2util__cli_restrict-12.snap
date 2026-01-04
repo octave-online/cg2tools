@@ -1,0 +1,20 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util restrict grp --auto cpu.max=90000\")"
+---
+Ok(
+    Cli {
+        command: Restrict(
+            RestrictCommand {
+                cgroup: "grp",
+                restrictions: [
+                    (
+                        "cpu.max",
+                        "90000",
+                    ),
+                ],
+                auto: true,
+            },
+        ),
+    },
+)

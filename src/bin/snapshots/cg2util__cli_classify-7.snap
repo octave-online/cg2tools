@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util classify grp 123 extra\")"
+---
+Err(
+    "error: invalid value 'extra' for '<PIDS>...': invalid digit found in string\n\nFor more information, try '--help'.\n",
+)

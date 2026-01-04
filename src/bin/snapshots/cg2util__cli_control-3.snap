@@ -1,0 +1,23 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util control grp +cpu\")"
+---
+Ok(
+    Cli {
+        command: Control(
+            ControlCommand {
+                cgroup: "grp",
+                control: ControlList {
+                    controllers: [
+                        ControllerFlag {
+                            name: "cpu",
+                            _enable: true,
+                        },
+                    ],
+                    inherit: None,
+                },
+                auto: false,
+            },
+        ),
+    },
+)

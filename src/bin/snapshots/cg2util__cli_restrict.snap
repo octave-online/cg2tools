@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util restrict\")"
+---
+Err(
+    "error: the following required arguments were not provided:\n  <CGROUP>\n  <RESTRICTIONS>...\n\nUsage: cg2util restrict <CGROUP> <RESTRICTIONS>...\n\nFor more information, try '--help'.\n",
+)

@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util control grp --inherit igrp +cpu\")"
+---
+Err(
+    "error: the argument '--inherit <CGROUP>' cannot be used with '[CONTROLLERS]...'\n\nUsage: cg2util control --inherit <CGROUP> <CGROUP> [CONTROLLERS]...\n\nFor more information, try '--help'.\n",
+)

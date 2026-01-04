@@ -1,0 +1,12 @@
+---
+source: src/bin/cg2exec.rs
+expression: "cli(\"cg2exec grp cmd\")"
+---
+Ok(
+    Cli {
+        cgroup: "grp",
+        cmd: [
+            "cmd",
+        ],
+    },
+)

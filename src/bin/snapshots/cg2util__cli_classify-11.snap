@@ -1,0 +1,17 @@
+---
+source: src/bin/cg2util.rs
+expression: "cli(\"cg2util classify grp 123 --auto\")"
+---
+Ok(
+    Cli {
+        command: Classify(
+            ClassifyCommand {
+                cgroup: "grp",
+                pids: [
+                    123,
+                ],
+                auto: true,
+            },
+        ),
+    },
+)
