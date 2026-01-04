@@ -69,6 +69,7 @@ name = "cg2tools"
 version = "0.0.2"
 dependencies = [
  "clap",
+ "clap_lex",
  "insta",
  "shlex",
 ]

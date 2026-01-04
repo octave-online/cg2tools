@@ -3,5 +3,5 @@ source: src/bin/cg2exec.rs
 expression: "cli(\"cg2exec grp --flag cmd\")"
 ---
 Err(
-    "error: unexpected argument '--flag' found\n\n  tip: to pass '--flag' as a value, use '-- --flag'\n\nUsage: cg2exec <CGROUP> <CMD> [ARGS]...\n\nFor more information, try '--help'.\n",
+    "Error: Unexpected flag or argument: \"--flag\"\nUsage: cg2exec <CGROUP> <CMD> [ARGS]...\n",
 )

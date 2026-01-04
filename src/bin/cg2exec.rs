@@ -15,7 +15,12 @@
 use cg2tools::internal;
 use cg2tools::CGroup;
 use clap::Parser;
+use clap_lex::RawArgs;
+use std::ffi::OsStr;
 use std::ffi::OsString;
+use std::fmt;
+use std::io;
+use std::io::Write;
 use std::process::Command;
 
 #[derive(Parser, Debug)]
@@ -34,8 +39,120 @@ struct Cli {
 	args: Vec<OsString>,
 }
 
+enum CliHelp {
+	Cli(Cli),
+	Help { bin_name: OsString },
+}
+
+enum CliError {
+	Unexpected { arg: OsString, bin_name: OsString },
+	InvalidCgroup { arg: OsString, bin_name: OsString },
+	MissingCgroup { bin_name: OsString },
+	MissingCommand { bin_name: OsString },
+}
+
+impl CliError {
+	fn bin_name(&self) -> &OsStr {
+		match self {
+			Self::Unexpected { bin_name, .. } => &*bin_name,
+			Self::InvalidCgroup { bin_name, .. } => &*bin_name,
+			Self::MissingCgroup { bin_name, .. } => &*bin_name,
+			Self::MissingCommand { bin_name, .. } => &*bin_name,
+		}
+	}
+}
+
+impl fmt::Display for CliError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+		match self {
+			Self::Unexpected { arg, .. } => {
+				write!(f, "Unexpected flag or argument: {arg:?}")
+			}
+			Self::InvalidCgroup { arg, .. } => {
+				write!(f, "Invalid control group name: {arg:?}")
+			}
+			Self::MissingCgroup { .. } => write!(f, "Missing control group"),
+			Self::MissingCommand { .. } => write!(f, "Missing subcommand"),
+		}
+	}
+}
+
+impl TryFrom<RawArgs> for CliHelp {
+	type Error = CliError;
+	fn try_from(raw: RawArgs) -> Result<Self, CliError> {
+		let mut cursor = raw.cursor();
+		let bin_name = raw.next(&mut cursor).unwrap().to_value_os().to_os_string();
+		let cgroup = match raw.next(&mut cursor) {
+			Some(arg) => match (&arg, arg.to_long(), arg.to_value()) {
+				(_, Some((Ok("help"), _)), _) => {
+					return Ok(CliHelp::Help { bin_name });
+				}
+				(arg, _, _) if arg.is_escape() || arg.is_stdio() || arg.is_long() || arg.is_short() => {
+					return Err(CliError::Unexpected {
+						arg: arg.to_value_os().to_os_string(),
+						bin_name,
+					});
+				}
+				(_, _, Ok(s)) => s.to_string(),
+				(_, _, Err(s)) => {
+					return Err(CliError::InvalidCgroup {
+						arg: s.to_os_string(),
+						bin_name,
+					});
+				}
+			},
+			None => return Err(CliError::MissingCgroup { bin_name }),
+		};
+		let cmd = match raw.next(&mut cursor) {
+			Some(arg) if arg.is_escape() || arg.is_stdio() || arg.is_long() || arg.is_short() => {
+				return Err(CliError::Unexpected {
+					arg: arg.to_value_os().to_os_string(),
+					bin_name,
+				});
+			}
+			Some(arg) => arg.to_value_os().to_os_string(),
+			None => return Err(CliError::MissingCommand { bin_name }),
+		};
+		let args = raw.remaining(&mut cursor).map(|s| s.to_os_string()).collect();
+		Ok(CliHelp::Cli(Cli { cgroup, cmd, args }))
+	}
+}
+
+fn print_usage(bin_name: &OsStr, mut sink: impl Write) -> Result<(), io::Error> {
+	writeln!(sink, "Usage: {} <CGROUP> <CMD> [ARGS]...", bin_name.display())
+}
+
+impl Cli {
+	pub fn try_from_env(sink: impl Write) -> Result<Cli, i32> {
+		Self::try_new_raw(RawArgs::from_args(), sink)
+	}
+
+	pub fn try_from_tokens(tokens: impl Iterator<Item = impl Into<OsString>>, sink: impl Write) -> Result<Cli, i32> {
+		Self::try_new_raw(RawArgs::new(tokens), sink)
+	}
+
+	fn try_new_raw(raw: RawArgs, mut sink: impl Write) -> Result<Cli, i32> {
+		match CliHelp::try_from(raw) {
+			Ok(CliHelp::Cli(cli)) => Ok(cli),
+			Ok(CliHelp::Help { bin_name }) => {
+				print_usage(&*bin_name, sink).unwrap();
+				Err(0)
+			}
+			Err(e) => {
+				writeln!(sink, "Error: {e}").unwrap();
+				print_usage(e.bin_name(), sink).unwrap();
+				Err(1)
+			}
+		}
+	}
+}
+
 fn main() {
-	let args = Cli::parse();
+	// let args = Cli::parse();
+	let args = match Cli::try_from_env(std::io::stderr()) {
+		Ok(args) => args,
+		Err(code) => std::process::exit(code),
+	};
 	internal::os_check(&args);
 	let mut cgroup = CGroup::current();
 	if cgroup.append(&args.cgroup) {
@@ -48,7 +165,13 @@ fn main() {
 #[test]
 fn test_cli() {
 	fn cli(input: &str) -> Result<Cli, String> {
-		Cli::try_parse_from(shlex::split(input).unwrap()).map_err(|e| format!("{e}"))
+		let tokens = shlex::split(input).unwrap();
+		// Cli::try_parse_from(tokens).map_err(|e| format!("{e}"))
+		let mut buf = Vec::<u8>::new();
+		match Cli::try_from_tokens(tokens.iter(), &mut buf) {
+			Ok(args) => Ok(args),
+			Err(_code) => Err(String::from_utf8(buf).unwrap())
+		}
 	}
 	insta::assert_debug_snapshot!(cli("cg2exec"));
 	insta::assert_debug_snapshot!(cli("cg2exec grp"));
