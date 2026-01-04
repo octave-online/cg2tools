@@ -42,22 +42,10 @@ Use this tool to create and configure control groups.
 $ cg2util create my_subgroup
 ```
 
-Equivalent cgroupfs command:
-
-```bash
-$ mkdir /sys/fs/cgroup/path/to/my.service/my_subgroup
-```
-
 **Example 2:** Reclassify the current process into a subgroup, creating the subgroup if it doesn't exist.
 
 ```bash
 $ cg2util classify --auto my_subgroup $$
-```
-
-Equivalent cgroupfs command (does NOT automatically create the group):
-
-```bash
-$ echo $$ > /sys/fs/cgroup/path/to/my.service/my_subgroup/cgroup.procs
 ```
 
 **Example 3:** Allow the group /custom/cpulimit to manipulate CPU restrictions.
@@ -66,22 +54,10 @@ $ echo $$ > /sys/fs/cgroup/path/to/my.service/my_subgroup/cgroup.procs
 $ cg2util control /custom/cpulimit +cpu
 ```
 
-Equivalent cgroupfs command:
-
-```bash
-$ echo +cpu > /sys/fs/cgroup/Custom/cgroup.subtree_control
-```
-
 **Example 4:** Restrict the group /custom/cpulimit to 90% of CPU, enforced in periods lasting 100ms. Create the group if it doesn't exist, and allow it to set that restriction.
 
 ```bash
 $ cg2util restrict --auto /custom/cpulimit cpu.max="90000 100000"
-```
-
-Equivalent cgroupfs command (does NOT automatically create the group or enable the controller):
-
-```bash
-$ echo "90000 100000" > /sys/fs/cgroup/Custom/cpulimit/cpu.max
 ```
 
 ## Installation
@@ -148,7 +124,7 @@ Watch the system monitor to see the control group limits in action.
 
 ### Example setup without --auto
 
-The equivalent of the above script without using `--auto`:
+The equivalent of the above script without using `--auto`, which can be more easily migrated to/from cgroupfs commands:
 
 ```bash
 #!/bin/bash
@@ -183,7 +159,17 @@ cg2exec ../subproc/tier2 stress -c 1 &
 # Wait 2 minutes and then shut down the service
 sleep 120
 ```
-```
+
+## cg2util <=> cgroupfs
+
+Many `cg2util` commands can be performed as cgroupfs operations. Relative cgroup paths and `--auto` are not directly supported in cgroupfs.
+
+| cg2util | cgroupfs |
+|---|---|
+| `cg2util create /custom` | `mkdir /sys/fs/cgroup/custom` |
+| `cg2util classify /custom $$` | `echo $$ > /sys/fs/cgroup/custom/cgroup.procs` |
+| `cg2util control /custom/cpulimit +cpu` | `echo +cpu > /sys/fs/cgroup/custom/cgroup.subtree_control` |
+| `cg2util restrict /custom/cpulimit cpu.max=90000` | `echo 90000 > /sys/fs/cgroup/custom/cpulimit/cpu.max` |
 
 ## Copyright and License
 
