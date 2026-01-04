@@ -64,6 +64,12 @@ $ cg2util restrict --auto /custom/cpulimit cpu.max="90000 100000"
 
 Install from the Cargo package manager.
 
+To install it into /usr/local/bin:
+
+```bash
+$ cargo install --root /usr/local cg2tools
+```
+
 ## Example: Integration with systemd service
 
 This example will use an unprivileged user to demonstrate that root permissions are not required by the service:
