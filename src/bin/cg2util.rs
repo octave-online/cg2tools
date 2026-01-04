@@ -43,7 +43,7 @@ struct ClassifyCommand {
 	pids: Vec<u32>,
 
 	/// Create the control group if it doesn't exist yet.
-	#[arg(long, short)]
+	#[arg(long)]
 	auto: bool,
 }
 
@@ -57,7 +57,7 @@ struct ControlCommand {
 	control: ControlList,
 
 	/// Create the control group if it doesn't exist yet.
-	#[arg(long, short)]
+	#[arg(long)]
 	auto: bool,
 }
 
@@ -101,7 +101,7 @@ struct RestrictCommand {
 	restrictions: Vec<(String, String)>,
 
 	/// Create the control group if it doesn't exist yet and enable the required controllers if they aren't enabled yet.
-	#[arg(long, short)]
+	#[arg(long)]
 	auto: bool,
 }
 
