@@ -15,6 +15,7 @@
 use cg2tools::internal;
 use cg2tools::CGroup;
 use clap::Parser;
+use std::ffi::OsString;
 use std::process::Command;
 
 #[derive(Parser, Debug)]
@@ -26,11 +27,11 @@ struct Cli {
 
 	/// The subcommand to run.
 	#[arg()]
-	cmd: String,
+	cmd: OsString,
 
 	/// Arguments to the subcommand.
 	#[arg(allow_hyphen_values(true))]
-	args: Vec<String>,
+	args: Vec<OsString>,
 }
 
 fn main() {
