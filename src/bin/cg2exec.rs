@@ -12,29 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use argh::FromArgs;
 use cg2tools::internal;
 use cg2tools::CGroup;
-use clap::Parser;
 use std::process::Command;
 
-#[derive(Parser, Debug)]
-#[command(version, about = "Runs a program with a specific control group")]
+/// Runs a program with a specific control group
+#[derive(FromArgs, Debug)]
 struct Cli {
-	/// Name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
-	#[arg()]
+	/// name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
+	#[argh(positional)]
 	cgroup: String,
 
-	/// The subcommand to run.
-	#[arg()]
+	/// the subcommand to run
+	#[argh(positional)]
 	cmd: String,
 
-	/// Arguments to the subcommand.
-	#[arg(allow_hyphen_values(true))]
+	/// arguments to the subcommand
+	#[argh(positional, greedy)]
 	args: Vec<String>,
 }
 
 fn main() {
-	let args = Cli::parse();
+	let args = argh::from_env::<Cli>();
 	internal::os_check(&args);
 	let mut cgroup = CGroup::current();
 	if cgroup.append(&args.cgroup) {
@@ -47,7 +47,9 @@ fn main() {
 #[test]
 fn test_cli() {
 	fn cli(input: &str) -> Result<Cli, String> {
-		Cli::try_parse_from(shlex::split(input).unwrap()).map_err(|e| format!("{e}"))
+		let tokens = shlex::split(input).unwrap();
+		let tokens = tokens.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
+		Cli::from_args(&[tokens[0]], &tokens[1..]).map_err(|e| format!("{e:?}"))
 	}
 	insta::assert_debug_snapshot!(cli("cg2exec"));
 	insta::assert_debug_snapshot!(cli("cg2exec grp"));

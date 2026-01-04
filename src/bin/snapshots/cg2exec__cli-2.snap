@@ -3,5 +3,5 @@ source: src/bin/cg2exec.rs
 expression: "cli(\"cg2exec grp\")"
 ---
 Err(
-    "error: the following required arguments were not provided:\n  <CMD>\n\nUsage: cg2exec <CGROUP> <CMD> [ARGS]...\n\nFor more information, try '--help'.\n",
+    "EarlyExit { output: \"Required positional arguments not provided:\\n    cmd\\n\", status: Err(()) }",
 )
