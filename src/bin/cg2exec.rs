@@ -14,7 +14,6 @@
 
 use cg2tools::internal;
 use cg2tools::CGroup;
-use clap::Parser;
 use clap_lex::RawArgs;
 use std::ffi::OsStr;
 use std::ffi::OsString;
@@ -23,19 +22,15 @@ use std::io;
 use std::io::Write;
 use std::process::Command;
 
-#[derive(Parser, Debug)]
-#[command(version, about = "Runs a program with a specific control group")]
+#[derive(Debug)]
 struct Cli {
 	/// Name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
-	#[arg()]
 	cgroup: String,
 
 	/// The subcommand to run.
-	#[arg()]
 	cmd: OsString,
 
 	/// Arguments to the subcommand.
-	#[arg(allow_hyphen_values(true))]
 	args: Vec<OsString>,
 }
 
@@ -138,6 +133,10 @@ impl TryFrom<RawArgs> for CliRequest {
 	}
 }
 
+fn print_description(mut sink: impl Write) -> Result<(), io::Error> {
+	writeln!(sink, "Runs a program with a specific control group")
+}
+
 fn print_usage(bin_name: &OsStr, mut sink: impl Write) -> Result<(), io::Error> {
 	writeln!(sink, "Usage: {} <CGROUP> <CMD> [ARGS]...", bin_name.to_string_lossy())
 }
@@ -147,6 +146,7 @@ impl Cli {
 		Self::try_new_raw(RawArgs::from_args(), sink)
 	}
 
+	#[cfg(test)]
 	pub fn try_from_tokens(tokens: impl Iterator<Item = impl Into<OsString>>, sink: impl Write) -> Result<Cli, i32> {
 		Self::try_new_raw(RawArgs::new(tokens), sink)
 	}
@@ -155,16 +155,17 @@ impl Cli {
 		match CliRequest::try_from(raw) {
 			Ok(CliRequest::Cli(cli)) => Ok(cli),
 			Ok(CliRequest::Help { bin_name }) => {
-				print_usage(&*bin_name, sink).unwrap();
+				print_description(&mut sink).unwrap();
+				print_usage(&*bin_name, &mut sink).unwrap();
 				Err(0)
 			}
 			Ok(CliRequest::Version) => {
-				writeln!(sink, "cg2tools {}", clap::crate_version!()).unwrap();
+				writeln!(&mut sink, "cg2tools {}", clap::crate_version!()).unwrap();
 				Err(0)
 			}
 			Err(e) => {
-				writeln!(sink, "Error: {e}").unwrap();
-				print_usage(e.bin_name(), sink).unwrap();
+				writeln!(&mut sink, "Error: {e}").unwrap();
+				print_usage(e.bin_name(), &mut sink).unwrap();
 				Err(1)
 			}
 		}
@@ -172,7 +173,6 @@ impl Cli {
 }
 
 fn main() {
-	// let args = Cli::parse();
 	let args = match Cli::try_from_env(std::io::stderr()) {
 		Ok(args) => args,
 		Err(code) => std::process::exit(code),
@@ -190,7 +190,6 @@ fn main() {
 fn test_cli() {
 	fn cli(input: &str) -> Result<Cli, String> {
 		let tokens = shlex::split(input).unwrap();
-		// Cli::try_parse_from(tokens).map_err(|e| format!("{e}"))
 		let mut buf = Vec::<u8>::new();
 		match Cli::try_from_tokens(tokens.iter(), &mut buf) {
 			Ok(args) => Ok(args),
