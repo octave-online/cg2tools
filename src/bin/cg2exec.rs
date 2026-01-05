@@ -39,9 +39,10 @@ struct Cli {
 	args: Vec<OsString>,
 }
 
-enum CliHelp {
+enum CliRequest {
 	Cli(Cli),
 	Help { bin_name: OsString },
+	Version,
 }
 
 enum CliError {
@@ -77,17 +78,36 @@ impl fmt::Display for CliError {
 	}
 }
 
-impl TryFrom<RawArgs> for CliHelp {
+impl TryFrom<RawArgs> for CliRequest {
 	type Error = CliError;
 	fn try_from(raw: RawArgs) -> Result<Self, CliError> {
 		let mut cursor = raw.cursor();
 		let bin_name = raw.next(&mut cursor).unwrap().to_value_os().to_os_string();
+		let mut escape = false;
 		let cgroup = match raw.next(&mut cursor) {
 			Some(arg) => match (&arg, arg.to_long(), arg.to_value()) {
 				(_, Some((Ok("help"), _)), _) => {
-					return Ok(CliHelp::Help { bin_name });
+					return Ok(CliRequest::Help { bin_name });
 				}
-				(arg, _, _) if arg.is_escape() || arg.is_stdio() || arg.is_long() || arg.is_short() => {
+				(_, Some((Ok("version"), _)), _) => {
+					return Ok(CliRequest::Version);
+				}
+				(arg, _, _) if arg.is_escape() => {
+					escape = true;
+					match raw.next(&mut cursor) {
+						Some(arg) => match arg.to_value() {
+							Ok(s) => s.to_string(),
+							Err(s) => {
+								return Err(CliError::InvalidCgroup {
+									arg: s.to_os_string(),
+									bin_name,
+								})
+							}
+						},
+						None => return Err(CliError::MissingCgroup { bin_name }),
+					}
+				}
+				(arg, _, _) if arg.is_stdio() || arg.is_long() || arg.is_short() => {
 					return Err(CliError::Unexpected {
 						arg: arg.to_value_os().to_os_string(),
 						bin_name,
@@ -104,7 +124,7 @@ impl TryFrom<RawArgs> for CliHelp {
 			None => return Err(CliError::MissingCgroup { bin_name }),
 		};
 		let cmd = match raw.next(&mut cursor) {
-			Some(arg) if arg.is_escape() || arg.is_stdio() || arg.is_long() || arg.is_short() => {
+			Some(arg) if !escape && (arg.is_escape() || arg.is_stdio() || arg.is_long() || arg.is_short()) => {
 				return Err(CliError::Unexpected {
 					arg: arg.to_value_os().to_os_string(),
 					bin_name,
@@ -114,7 +134,7 @@ impl TryFrom<RawArgs> for CliHelp {
 			None => return Err(CliError::MissingCommand { bin_name }),
 		};
 		let args = raw.remaining(&mut cursor).map(|s| s.to_os_string()).collect();
-		Ok(CliHelp::Cli(Cli { cgroup, cmd, args }))
+		Ok(CliRequest::Cli(Cli { cgroup, cmd, args }))
 	}
 }
 
@@ -132,10 +152,14 @@ impl Cli {
 	}
 
 	fn try_new_raw(raw: RawArgs, mut sink: impl Write) -> Result<Cli, i32> {
-		match CliHelp::try_from(raw) {
-			Ok(CliHelp::Cli(cli)) => Ok(cli),
-			Ok(CliHelp::Help { bin_name }) => {
+		match CliRequest::try_from(raw) {
+			Ok(CliRequest::Cli(cli)) => Ok(cli),
+			Ok(CliRequest::Help { bin_name }) => {
 				print_usage(&*bin_name, sink).unwrap();
+				Err(0)
+			}
+			Ok(CliRequest::Version) => {
+				writeln!(sink, "cg2tools {}", clap::crate_version!()).unwrap();
 				Err(0)
 			}
 			Err(e) => {
@@ -180,4 +204,9 @@ fn test_cli() {
 	insta::assert_debug_snapshot!(cli("cg2exec --flag grp cmd"));
 	insta::assert_debug_snapshot!(cli("cg2exec grp --flag cmd"));
 	insta::assert_debug_snapshot!(cli("cg2exec grp cmd --flag"));
+	insta::assert_debug_snapshot!(cli("cg2exec -- grp cmd extra"));
+	insta::assert_debug_snapshot!(cli("cg2exec grp -- cmd extra"));
+	insta::assert_debug_snapshot!(cli("cg2exec grp cmd -- extra"));
+	insta::assert_debug_snapshot!(cli("cg2exec grp cmd extra --"));
+	insta::assert_debug_snapshot!(cli("cg2exec -- -grp -cmd -extra"));
 }
