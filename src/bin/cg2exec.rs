@@ -23,113 +23,101 @@ use std::io::Write;
 use std::process::Command;
 
 #[derive(Debug)]
-struct Cli {
+struct CliExecCommand<'a> {
 	/// Name of the control group. May be relative (appended to the control group of the current process) or absolute (starting with "/").
-	cgroup: String,
+	cgroup: &'a OsStr,
 
 	/// The subcommand to run.
-	cmd: OsString,
+	cmd: &'a OsStr,
 
 	/// Arguments to the subcommand.
-	args: Vec<OsString>,
+	args: Vec<&'a OsStr>,
 }
 
-enum CliRequest {
-	Cli(Cli),
-	Help { bin_name: OsString },
+struct CliHelpCommand<'a> {
+	bin_name: &'a OsStr,
+}
+
+enum CliCommand<'a> {
+	Exec(CliExecCommand<'a>),
+	Help(CliHelpCommand<'a>),
 	Version,
 }
 
-enum CliError {
-	Unexpected { arg: OsString, bin_name: OsString },
-	InvalidCgroup { arg: OsString, bin_name: OsString },
-	MissingCgroup { bin_name: OsString },
-	MissingCommand { bin_name: OsString },
+struct CliError<'a> {
+	bin_name: &'a OsStr,
+	kind: CliErrorKind<'a>,
 }
 
-impl CliError {
-	fn bin_name(&self) -> &OsStr {
-		match self {
-			Self::Unexpected { bin_name, .. } => &*bin_name,
-			Self::InvalidCgroup { bin_name, .. } => &*bin_name,
-			Self::MissingCgroup { bin_name, .. } => &*bin_name,
-			Self::MissingCommand { bin_name, .. } => &*bin_name,
-		}
-	}
+enum CliErrorKind<'a> {
+	Unexpected { arg: &'a OsStr },
+	InvalidCgroup { arg: &'a OsStr },
+	MissingCgroup,
+	MissingCommand,
 }
 
-impl fmt::Display for CliError {
+impl fmt::Display for CliError<'_> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-		match self {
-			Self::Unexpected { arg, .. } => {
+		match self.kind {
+			CliErrorKind::Unexpected { arg } => {
 				write!(f, "Unexpected flag or argument: {arg:?}")
 			}
-			Self::InvalidCgroup { arg, .. } => {
+			CliErrorKind::InvalidCgroup { arg } => {
 				write!(f, "Invalid control group name: {arg:?}")
 			}
-			Self::MissingCgroup { .. } => write!(f, "Missing control group"),
-			Self::MissingCommand { .. } => write!(f, "Missing subcommand"),
+			CliErrorKind::MissingCgroup => write!(f, "Missing control group"),
+			CliErrorKind::MissingCommand => write!(f, "Missing subcommand"),
 		}
 	}
 }
 
-impl TryFrom<RawArgs> for CliRequest {
-	type Error = CliError;
-	fn try_from(raw: RawArgs) -> Result<Self, CliError> {
+impl<'a> TryFrom<&'a RawArgs> for CliCommand<'a> {
+	type Error = CliError<'a>;
+	fn try_from(raw: &'a RawArgs) -> Result<Self, CliError<'a>> {
 		let mut cursor = raw.cursor();
-		let bin_name = raw.next(&mut cursor).unwrap().to_value_os().to_os_string();
+		let bin_name = raw.next(&mut cursor).unwrap().to_value_os();
 		let mut escape = false;
 		let cgroup = match raw.next(&mut cursor) {
-			Some(arg) => match (&arg, arg.to_long(), arg.to_value()) {
+			Some(arg) => match (&arg, arg.to_long(), arg.to_value_os()) {
 				(_, Some((Ok("help"), _)), _) => {
-					return Ok(CliRequest::Help { bin_name });
+					return Ok(CliCommand::Help(CliHelpCommand { bin_name }));
 				}
 				(_, Some((Ok("version"), _)), _) => {
-					return Ok(CliRequest::Version);
+					return Ok(CliCommand::Version);
 				}
 				(arg, _, _) if arg.is_escape() => {
 					escape = true;
 					match raw.next(&mut cursor) {
-						Some(arg) => match arg.to_value() {
-							Ok(s) => s.to_string(),
-							Err(s) => {
-								return Err(CliError::InvalidCgroup {
-									arg: s.to_os_string(),
-									bin_name,
-								})
-							}
-						},
-						None => return Err(CliError::MissingCgroup { bin_name }),
+						Some(arg) => arg.to_value_os(),
+						None => return Err(CliError { bin_name, kind: CliErrorKind::MissingCgroup }),
 					}
 				}
 				(arg, _, _) if arg.is_stdio() || arg.is_long() || arg.is_short() => {
-					return Err(CliError::Unexpected {
-						arg: arg.to_value_os().to_os_string(),
+					return Err(CliError {
 						bin_name,
+						kind: CliErrorKind::Unexpected {
+							arg: arg.to_value_os(),
+						}
 					});
 				}
-				(_, _, Ok(s)) => s.to_string(),
-				(_, _, Err(s)) => {
-					return Err(CliError::InvalidCgroup {
-						arg: s.to_os_string(),
-						bin_name,
-					});
-				}
+				(_, _, s) => s,
 			},
-			None => return Err(CliError::MissingCgroup { bin_name }),
+			None => return Err(CliError { bin_name, kind: CliErrorKind::MissingCgroup }),
 		};
 		let cmd = match raw.next(&mut cursor) {
 			Some(arg) if !escape && (arg.is_escape() || arg.is_stdio() || arg.is_long() || arg.is_short()) => {
-				return Err(CliError::Unexpected {
-					arg: arg.to_value_os().to_os_string(),
+				return Err(CliError {
 					bin_name,
+					kind: CliErrorKind::Unexpected {
+						arg: arg.to_value_os(),
+					}
 				});
 			}
-			Some(arg) => arg.to_value_os().to_os_string(),
-			None => return Err(CliError::MissingCommand { bin_name }),
+			Some(arg) => arg.to_value_os(),
+			None => return Err(CliError { bin_name, kind: CliErrorKind::MissingCommand }),
 		};
-		let args = raw.remaining(&mut cursor).map(|s| s.to_os_string()).collect();
-		Ok(CliRequest::Cli(Cli { cgroup, cmd, args }))
+		let args = raw.remaining(&mut cursor).collect();
+		Ok(CliCommand::Exec(CliExecCommand { cgroup, cmd, args }))
 	}
 }
 
@@ -141,31 +129,22 @@ fn print_usage(bin_name: &OsStr, mut sink: impl Write) -> Result<(), io::Error> 
 	writeln!(sink, "Usage: {} <CGROUP> <CMD> [ARGS]...", bin_name.to_string_lossy())
 }
 
-impl Cli {
-	pub fn try_from_env(sink: impl Write) -> Result<Cli, i32> {
-		Self::try_new_raw(RawArgs::from_args(), sink)
-	}
-
-	#[cfg(test)]
-	pub fn try_from_tokens(tokens: impl Iterator<Item = impl Into<OsString>>, sink: impl Write) -> Result<Cli, i32> {
-		Self::try_new_raw(RawArgs::new(tokens), sink)
-	}
-
-	fn try_new_raw(raw: RawArgs, mut sink: impl Write) -> Result<Cli, i32> {
-		match CliRequest::try_from(raw) {
-			Ok(CliRequest::Cli(cli)) => Ok(cli),
-			Ok(CliRequest::Help { bin_name }) => {
+impl<'a> CliExecCommand<'a> {
+	pub fn try_from_raw(raw: &'a RawArgs, mut sink: impl Write) -> Result<CliExecCommand, i32> {
+		match CliCommand::try_from(raw) {
+			Ok(CliCommand::Exec(cli)) => Ok(cli),
+			Ok(CliCommand::Help(CliHelpCommand { bin_name })) => {
 				print_description(&mut sink).unwrap();
 				print_usage(&*bin_name, &mut sink).unwrap();
 				Err(0)
 			}
-			Ok(CliRequest::Version) => {
+			Ok(CliCommand::Version) => {
 				writeln!(&mut sink, "cg2tools {}", clap::crate_version!()).unwrap();
 				Err(0)
 			}
 			Err(e) => {
 				writeln!(&mut sink, "Error: {e}").unwrap();
-				print_usage(e.bin_name(), &mut sink).unwrap();
+				print_usage(e.bin_name, &mut sink).unwrap();
 				Err(1)
 			}
 		}
@@ -173,7 +152,8 @@ impl Cli {
 }
 
 fn main() {
-	let args = match Cli::try_from_env(std::io::stderr()) {
+	let raw_args = RawArgs::from_args();
+	let args = match CliExecCommand::try_from_raw(&raw_args, std::io::stderr()) {
 		Ok(args) => args,
 		Err(code) => std::process::exit(code),
 	};
@@ -188,10 +168,11 @@ fn main() {
 
 #[test]
 fn test_cli() {
-	fn cli(input: &str) -> Result<Cli, String> {
+	fn cli(input: &str) -> Result<CliExecCommand, String> {
 		let tokens = shlex::split(input).unwrap();
 		let mut buf = Vec::<u8>::new();
-		match Cli::try_from_tokens(tokens.iter(), &mut buf) {
+		let raw_args = RawArgs::new(tokens);
+		match CliExecCommand::try_from_raw(&raw_args, &mut buf) {
 			Ok(args) => Ok(args),
 			Err(_code) => Err(String::from_utf8(buf).unwrap()),
 		}
