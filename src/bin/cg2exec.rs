@@ -73,26 +73,26 @@ impl fmt::Display for CliError<'_> {
 
 impl<'a> TryFrom<&'a RawArgs> for CliCommand<'a> {
 	type Error = CliError<'a>;
-	fn try_from(raw: &'a RawArgs) -> Result<Self, CliError<'a>> {
+	fn try_from(raw: &'a RawArgs) -> Result<CliCommand<'a>, CliError<'a>> {
 		let mut cursor = raw.cursor();
 		let bin_name = raw.next(&mut cursor).unwrap().to_value_os();
 		let mut escape = false;
 		let cgroup = match raw.next(&mut cursor) {
-			Some(arg) => match (&arg, arg.to_long(), arg.to_value_os()) {
-				(_, Some((Ok("help"), _)), _) => {
+			Some(arg) => match (arg.to_long(), &arg) {
+				(Some((Ok("help"), _)), _) => {
 					return Ok(CliCommand::Help(CliHelpCommand { bin_name }));
 				}
-				(_, Some((Ok("version"), _)), _) => {
+				(Some((Ok("version"), _)), _) => {
 					return Ok(CliCommand::Version);
 				}
-				(arg, _, _) if arg.is_escape() => {
+				(_, arg) if arg.is_escape() => {
 					escape = true;
 					match raw.next(&mut cursor) {
 						Some(arg) => arg.to_value_os(),
 						None => return Err(CliError { bin_name, kind: CliErrorKind::MissingCgroup }),
 					}
 				}
-				(arg, _, _) if arg.is_stdio() || arg.is_long() || arg.is_short() => {
+				(_, arg) if arg.is_stdio() || arg.is_long() || arg.is_short() => {
 					return Err(CliError {
 						bin_name,
 						kind: CliErrorKind::Unexpected {
@@ -100,7 +100,7 @@ impl<'a> TryFrom<&'a RawArgs> for CliCommand<'a> {
 						}
 					});
 				}
-				(_, _, s) => s,
+				(_, arg) => arg.to_value_os(),
 			},
 			None => return Err(CliError { bin_name, kind: CliErrorKind::MissingCgroup }),
 		};
@@ -168,25 +168,26 @@ fn main() {
 
 #[test]
 fn test_cli() {
-	fn cli(input: &str) -> Result<CliExecCommand, String> {
+	let mut a: Option<RawArgs> = None;
+	fn cli<'s>(input: &str, anchor: &'s mut Option<RawArgs>) -> Result<CliExecCommand<'s>, String> {
 		let tokens = shlex::split(input).unwrap();
 		let mut buf = Vec::<u8>::new();
-		let raw_args = RawArgs::new(tokens);
-		match CliExecCommand::try_from_raw(&raw_args, &mut buf) {
+		let raw_args = anchor.insert(RawArgs::new(tokens));
+		match CliExecCommand::try_from_raw(raw_args, &mut buf) {
 			Ok(args) => Ok(args),
 			Err(_code) => Err(String::from_utf8(buf).unwrap()),
 		}
 	}
-	insta::assert_debug_snapshot!(cli("cg2exec"));
-	insta::assert_debug_snapshot!(cli("cg2exec grp"));
-	insta::assert_debug_snapshot!(cli("cg2exec grp cmd"));
-	insta::assert_debug_snapshot!(cli("cg2exec grp cmd extra"));
-	insta::assert_debug_snapshot!(cli("cg2exec --flag grp cmd"));
-	insta::assert_debug_snapshot!(cli("cg2exec grp --flag cmd"));
-	insta::assert_debug_snapshot!(cli("cg2exec grp cmd --flag"));
-	insta::assert_debug_snapshot!(cli("cg2exec -- grp cmd extra"));
-	insta::assert_debug_snapshot!(cli("cg2exec grp -- cmd extra"));
-	insta::assert_debug_snapshot!(cli("cg2exec grp cmd -- extra"));
-	insta::assert_debug_snapshot!(cli("cg2exec grp cmd extra --"));
-	insta::assert_debug_snapshot!(cli("cg2exec -- -grp -cmd -extra"));
+	insta::assert_debug_snapshot!(cli("cg2exec", &mut a));
+	insta::assert_debug_snapshot!(cli("cg2exec grp", &mut a));
+	insta::assert_debug_snapshot!(cli("cg2exec grp cmd", &mut a));
+	insta::assert_debug_snapshot!(cli("cg2exec grp cmd extra", &mut a));
+	insta::assert_debug_snapshot!(cli("cg2exec --flag grp cmd", &mut a));
+	insta::assert_debug_snapshot!(cli("cg2exec grp --flag cmd", &mut a));
+	insta::assert_debug_snapshot!(cli("cg2exec grp cmd --flag", &mut a));
+	insta::assert_debug_snapshot!(cli("cg2exec -- grp cmd extra", &mut a));
+	insta::assert_debug_snapshot!(cli("cg2exec grp -- cmd extra", &mut a));
+	insta::assert_debug_snapshot!(cli("cg2exec grp cmd -- extra", &mut a));
+	insta::assert_debug_snapshot!(cli("cg2exec grp cmd extra --", &mut a));
+	insta::assert_debug_snapshot!(cli("cg2exec -- -grp -cmd -extra", &mut a));
 }
