@@ -1,9 +1,9 @@
 ---
 source: src/bin/cg2exec.rs
-expression: "cli(\"cg2exec grp cmd --flag\")"
+expression: "cli(\"cg2exec grp cmd --flag\", &mut a)"
 ---
 Ok(
-    Cli {
+    CliExecCommand {
         cgroup: "grp",
         cmd: "cmd",
         args: [
