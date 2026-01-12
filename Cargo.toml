@@ -22,7 +22,8 @@ license = "Apache-2.0"
 keywords = ["cgroup", "cgroups", "systemd", "cgexec", "libcgroup"]
 
 [dependencies]
-clap = { version = "4.5.54", features = ["derive"] }
+clap = { version = "4.5.54", features = ["cargo", "derive"] }
+clap_lex = { version = "0.7", git = "https://github.com/sffc/clap.git", branch = "lex-lifetime" }
 
 [dev-dependencies]
 insta = "1"
