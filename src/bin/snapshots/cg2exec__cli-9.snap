@@ -1,0 +1,7 @@
+---
+source: src/bin/cg2exec.rs
+expression: "cli(\"cg2exec grp -- cmd extra\")"
+---
+Err(
+    "Error: Unexpected flag or argument: \"--\"\nUsage: cg2exec <CGROUP> <CMD> [ARGS]...\n",
+)
